@@ -310,7 +310,7 @@
           const [error, setError] = useState(null);
           
           const [cmeList, setCmeList] = useState(DATA_EN);
-          const [selectedCme, setSelectedCme] = useState(DATA_EN[5]); 
+          const [selectedCme, setSelectedCme] = useState(DATA_EN[1]); // Default to X1.1 Halo event
           
           const [activeTab, setActiveTab] = useState('visualizer');
           const [simulationSpeed, setSimulationSpeed] = useState(1);
@@ -366,6 +366,31 @@
             window.addEventListener('keydown', handleKeyDown);
             return () => window.removeEventListener('keydown', handleKeyDown);
           }, []);
+
+          // --- Automatic Date Range Maximizer/Symmetrizer ---
+          const adjustEndDate = (start) => {
+            const d = new Date(start);
+            d.setDate(d.getDate() + 14);
+            return d.toISOString().split('T')[0];
+          };
+
+          const adjustStartDate = (end) => {
+            const d = new Date(end);
+            d.setDate(d.getDate() - 14);
+            return d.toISOString().split('T')[0];
+          };
+
+          const handleStartDateChange = (e) => {
+            const val = e.target.value;
+            setStartDate(val);
+            setEndDate(adjustEndDate(val));
+          };
+
+          const handleEndDateChange = (e) => {
+            const val = e.target.value;
+            setEndDate(val);
+            setStartDate(adjustStartDate(val));
+          };
 
           const renderOrbitCanvas = (canvas) => {
             if (!canvas) return;
@@ -690,8 +715,12 @@
           const handleMouseMoveSunDisk = (e) => {
             const canvas = e.currentTarget;
             const rect = canvas.getBoundingClientRect();
-            const x = e.clientX - rect.left;
-            const y = e.clientY - rect.top;
+            
+            // Scaled exact coordinates mapping (fixes scaling glitches on all viewport widths & fullscreens)
+            const relativeX = e.clientX - rect.left;
+            const relativeY = e.clientY - rect.top;
+            const x = relativeX * (canvas.width / rect.width);
+            const y = relativeY * (canvas.height / rect.height);
 
             setMousePos({ x: e.clientX, y: e.clientY });
 
@@ -756,7 +785,13 @@
               while (attempt < maxAttempts) {
                 try {
                   response = await fetch(`https://api.nasa.gov/DONKI/CME?startDate=${startDate}&endDate=${endDate}&api_key=${apiKey}`);
-                  if (response.ok) break;
+                  if (response.ok) {
+                    break;
+                  } else {
+                    attempt++;
+                    if (attempt >= maxAttempts) break;
+                    await new Promise(resolve => setTimeout(resolve, attempt * 1000));
+                  }
                 } catch (err) {
                   attempt++;
                   if (attempt >= maxAttempts) throw err;
@@ -773,6 +808,7 @@
                 throw new Error(lang === 'hu' ? 'Nincs rögzített adat a megadott intervallumban.' : 'No recorded events during this period.');
               }
 
+              // Filter events that have valid CME analyses where possible
               setCmeList(data);
               setSelectedCme(data[0]);
             } catch (err) {
@@ -797,7 +833,7 @@
                     </svg>
                   </div>
                   <div>
-                    <h1 className="text-xl font-bold tracking-tight bg-gradient-to-r from-amber-400 to-orange-500 bg-clip-text text-transparent animate-pulse">
+                    <h1 className="text-xl font-bold tracking-tight bg-gradient-to-r from-amber-400 to-orange-500 bg-clip-text text-transparent">
                       CME Visualizer
                     </h1>
                     <p className="text-xs text-slate-400 font-mono">
@@ -845,7 +881,10 @@
                         onClick={() => setIsApiSettingsOpen(!isApiSettingsOpen)}
                         className={`text-slate-400 hover:text-amber-400 transition p-1 rounded hover:bg-slate-800 ${isApiSettingsOpen ? 'text-amber-400 bg-slate-800' : ''}`}
                       >
-                        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37(2.37)a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" /><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" /></svg>
+                        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37-2.37a1.724 1.724 0 001.065-2.572c1.756-.426 1.756-2.924 0-3.35a1.724 1.724 0 00-1.066-2.573c-.94-1.543-.826-3.31-2.37-2.37a1.724 1.724 0 00-2.572-1.065c-.426-1.756-2.924-1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37 2.37a1.724 1.724 0 00-1.065 2.572c-1.756.426-1.756 2.924 0 3.35a1.724 1.724 0 001.066 2.573c.94 1.543-.826 3.31 2.37 2.37.996.608 2.296.07 2.572-1.065z" />
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                        </svg>
                       </button>
                     </div>
 
@@ -871,13 +910,13 @@
                       </div>
                     )}
 
-                    <form onSubmit={handleFetchTrigger} className="space-y-4">
+                    <form onSubmit={handleFetchTrigger} className="space-y-4 font-sans">
                       <div>
                         <label className="block text-xs font-medium text-slate-400 mb-1">{lang === 'hu' ? 'Kezdő Dátum' : 'Start Date'}</label>
                         <input 
                           type="date" 
                           value={startDate} 
-                          onChange={(e) => setStartDate(e.target.value)}
+                          onChange={handleStartDateChange}
                           className="w-full bg-slate-950 border border-slate-800 rounded px-3 py-2 text-sm text-slate-200 focus:outline-none focus:border-amber-500"
                         />
                       </div>
@@ -887,7 +926,7 @@
                         <input 
                           type="date" 
                           value={endDate} 
-                          onChange={(e) => setEndDate(e.target.value)}
+                          onChange={handleEndDateChange}
                           className="w-full bg-slate-950 border border-slate-800 rounded px-3 py-2 text-sm text-slate-200 focus:outline-none focus:border-amber-500"
                         />
                       </div>
@@ -898,7 +937,13 @@
                         className="w-full mt-2 py-2 px-4 bg-gradient-to-r from-amber-500 to-orange-600 hover:from-amber-600 hover:to-orange-700 text-slate-950 font-bold rounded text-sm transition shadow-lg shadow-amber-500/10 hover:shadow-amber-500/20 flex items-center justify-center gap-2"
                       >
                         {loading ? (
-                          <span>{lang === 'hu' ? 'Lekérdezés folyamatban...' : 'Querying Systems...'}</span>
+                          <>
+                            <svg className="animate-spin h-4 w-4 text-slate-950" fill="none" viewBox="0 0 24 24">
+                              <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                              <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+                            </svg>
+                            <span>{lang === 'hu' ? 'Betöltés...' : 'Loading...'}</span>
+                          </>
                         ) : (
                           <span>{lang === 'hu' ? 'Betöltés' : 'Load'}</span>
                         )}
@@ -958,7 +1003,6 @@
                   </div>
                 </section>
 
-                {}
                 <section className="lg:col-span-8 flex flex-col gap-6">
                   
                   <div className="bg-slate-900 border border-slate-800 rounded-xl p-2 flex gap-2">
@@ -1029,7 +1073,7 @@
 
                             {hoveredCmeDisk && (
                               <div 
-                                className="fixed z-50 bg-slate-950/95 border border-amber-500/80 p-3.5 rounded-lg shadow-2xl pointer-events-none max-w-xs transition-opacity duration-150 text-xs text-left"
+                                className="fixed z-[9999] bg-slate-950/95 border border-amber-500/80 p-3.5 rounded-lg shadow-2xl pointer-events-none max-w-xs transition-opacity duration-150 text-xs text-left"
                                 style={{
                                   left: `${mousePos.x + 15}px`,
                                   top: `${mousePos.y + 15}px`,
@@ -1092,7 +1136,6 @@
                           </div>
                         </div>
 
-                        {}
                         <div className="bg-slate-900 border border-slate-800 rounded-xl p-5 shadow-xl flex flex-col items-center justify-between">
                           <div className="w-full flex justify-between items-center mb-4">
                             <h3 className="text-xs font-bold uppercase tracking-wider text-slate-400">
@@ -1159,7 +1202,6 @@
 
                       </div>
 
-                      {}
                       <div className="bg-slate-900 border border-slate-800 rounded-xl p-5 shadow-xl flex flex-col justify-between font-sans">
                         <div>
                           <div className="flex justify-between items-center mb-3">
@@ -1286,9 +1328,8 @@
 
               </main>
 
-              {}
               {showConfirmModal && (
-                <div className="fixed inset-0 z-50 bg-slate-950/80 backdrop-blur-sm flex items-center justify-center p-4 font-sans">
+                <div className="fixed inset-0 z-[10000] bg-slate-950/80 backdrop-blur-sm flex items-center justify-center p-4 font-sans">
                   <div className="bg-slate-900 border border-amber-500/30 rounded-xl max-w-md w-full p-6 shadow-2xl">
                     <div className="flex items-center gap-3 text-amber-400 mb-4">
                       <svg className="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" /></svg>
@@ -1321,14 +1362,13 @@
                 </div>
               )}
 
-              {}
               {fullscreenElement && (
                 <div className="fixed inset-0 z-50 bg-slate-950 flex flex-col items-center justify-center p-4 font-sans">
                   <button 
                     onClick={() => setFullscreenElement(null)}
                     className="absolute top-4 right-4 bg-slate-800 text-slate-100 hover:bg-slate-700 px-4 py-2 rounded-lg font-bold text-xs border border-slate-700 transition flex items-center gap-2"
                   >
-                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12" /></svg>
+                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M6 18L18 6M6 6l12 12" /></svg>
                     {lang === 'hu' ? 'Bezárás (ESC)' : 'Close (ESC)'}
                   </button>
                   
@@ -1355,7 +1395,7 @@
                         
                         {hoveredCmeDisk && (
                           <div 
-                            className="fixed z-50 bg-slate-950/95 border border-amber-500/80 p-3.5 rounded-lg shadow-2xl pointer-events-none max-w-xs transition-opacity duration-150 text-xs text-left"
+                            className="fixed z-[9999] bg-slate-950/95 border border-amber-500/80 p-3.5 rounded-lg shadow-2xl pointer-events-none max-w-xs transition-opacity duration-150 text-xs text-left"
                             style={{
                               left: `${mousePos.x + 15}px`,
                               top: `${mousePos.y + 15}px`,
@@ -1364,7 +1404,7 @@
                             <p className="text-[10px] font-mono text-amber-400 font-bold mb-1.5 tracking-wider uppercase">
                               {lang === 'hu' ? 'CME FORRÁSKOORDINÁTÁK' : 'CME SOURCE PROFILE'}
                             </p>
-                            <h4 className="text-xs font-bold text-slate-100 mb-2 border-b border-slate-800 pb-1.5">
+                            <h4 className="text-xs font-bold text-slate-100 mb-2 border-b border-slate-800 pb-1.5 font-sans">
                               {hoveredCmeDisk.activityID}
                             </h4>
                             <div className="space-y-1.5 text-[11px] text-slate-300 font-sans">
@@ -1375,14 +1415,14 @@
                                 <p className="text-[10px] text-amber-500 font-bold uppercase tracking-tight">
                                   {lang === 'hu' ? 'Eredeti kitörési koordináták:' : 'Original coordinates:'}
                                 </p>
-                                <p className="font-mono bg-slate-900/60 p-1 rounded border border-slate-800/50">
+                                <p className="font-mono bg-slate-900/60 p-1 rounded border border-slate-800/50 font-sans">
                                   Lat: {projectCoordinatesToEndDate(hoveredCmeDisk, endDate).originalLat}°, Lon: {projectCoordinatesToEndDate(hoveredCmeDisk, endDate).originalLon}°
                                 </p>
                                 
                                 <p className="text-[10px] text-green-400 font-bold uppercase tracking-tight mt-1.5">
                                   {lang === 'hu' ? 'Záródátumra vetített koordináták:' : 'Projected (At End Date):'}
                                 </p>
-                                <p className="font-mono bg-slate-900/60 p-1 rounded border border-slate-800/50 text-green-300">
+                                <p className="font-mono bg-slate-900/60 p-1 rounded border border-slate-800/50 text-green-300 font-sans">
                                   Lat: {projectCoordinatesToEndDate(hoveredCmeDisk, endDate).latitude}°, Lon: {projectCoordinatesToEndDate(hoveredCmeDisk, endDate).longitude}°
                                 </p>
                               </div>
@@ -1402,7 +1442,7 @@
                 </div>
               )}
 
-              <footer className="bg-slate-950 border-t border-slate-900 px-6 py-4 text-center text-xs text-slate-500">
+              <footer className="bg-slate-950 border-t border-slate-900 px-6 py-4 text-center text-xs text-slate-500 font-sans">
                 <p>© 2026 Space Weather Observatory. Az adatok közvetlenül a NASA Space Weather Database of Notifications, Knowledge, and Information (DONKI) rendszeréből származnak.</p>
               </footer>
             </div>

@@ -17,7 +17,7 @@
             width: 6px;
         }
         .custom-scrollbar::-webkit-scrollbar-track {
-            background: #090d16;
+            background: #020617;
         }
         .custom-scrollbar::-webkit-scrollbar-thumb {
             background: #1e293b;
@@ -34,6 +34,13 @@
     <script type="text/babel">
         const { useState, useEffect, useRef } = React;
 
+        // ==========================================
+        // GLOBÁLIS KONSTANSOK (KÖNNYEN MÓDOSÍTHATÓ)
+        // ==========================================
+        const MAXDATERANGE = 5;        // Maximális engedélyezett időintervallum napokban
+        const API_KEY = "DEMO_KEY";    // NASA DONKI API kulcs
+
+        // --- Preloaded Space Weather Data (June 30 - July 1, 2026) ---
         const DATA_EN = [
           {
             activityID: "2026-06-30T15:00:00-CME-001",
@@ -304,8 +311,6 @@
           const [lang, setLang] = useState('en'); 
           const [startDate, setStartDate] = useState('2026-06-30');
           const [endDate, setEndDate] = useState('2026-07-01');
-          const [apiKey, setApiKey] = useState('DEMO_KEY');
-          const [isApiSettingsOpen, setIsApiSettingsOpen] = useState(false);
           const [loading, setLoading] = useState(false);
           const [error, setError] = useState(null);
           
@@ -367,16 +372,16 @@
             return () => window.removeEventListener('keydown', handleKeyDown);
           }, []);
 
-          // --- Automatic Date Range Maximizer/Symmetrizer ---
+          // --- Automatic Date Range Symmetrizer utilizing MAXDATERANGE constant ---
           const adjustEndDate = (start) => {
             const d = new Date(start);
-            d.setDate(d.getDate() + 14);
+            d.setDate(d.getDate() + MAXDATERANGE);
             return d.toISOString().split('T')[0];
           };
 
           const adjustStartDate = (end) => {
             const d = new Date(end);
-            d.setDate(d.getDate() - 14);
+            d.setDate(d.getDate() - MAXDATERANGE);
             return d.toISOString().split('T')[0];
           };
 
@@ -716,7 +721,6 @@
             const canvas = e.currentTarget;
             const rect = canvas.getBoundingClientRect();
             
-            // Scaled exact coordinates mapping (fixes scaling glitches on all viewport widths & fullscreens)
             const relativeX = e.clientX - rect.left;
             const relativeY = e.clientY - rect.top;
             const x = relativeX * (canvas.width / rect.width);
@@ -766,7 +770,7 @@
             const diffTime = Math.abs(d2 - d1);
             const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
 
-            if (diffDays > 14) {
+            if (diffDays > MAXDATERANGE) {
               setShowConfirmModal(true);
             } else {
               executeFetch();
@@ -784,7 +788,7 @@
               
               while (attempt < maxAttempts) {
                 try {
-                  response = await fetch(`https://api.nasa.gov/DONKI/CME?startDate=${startDate}&endDate=${endDate}&api_key=${apiKey}`);
+                  response = await fetch(`https://api.nasa.gov/DONKI/CME?startDate=${startDate}&endDate=${endDate}&api_key=${API_KEY}`);
                   if (response.ok) {
                     break;
                   } else {
@@ -808,7 +812,6 @@
                 throw new Error(lang === 'hu' ? 'Nincs rögzített adat a megadott intervallumban.' : 'No recorded events during this period.');
               }
 
-              // Filter events that have valid CME analyses where possible
               setCmeList(data);
               setSelectedCme(data[0]);
             } catch (err) {
@@ -875,40 +878,7 @@
                         <svg className="w-4 h-4 text-amber-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 6V4m0 2a2 2 0 100 4m0-4a2 2 0 110 4m-6 8a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4m6 6v10m6-2a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4" /></svg>
                         {lang === 'hu' ? 'Paraméterek' : 'Parameters'}
                       </h2>
-                      
-                      <button 
-                        type="button"
-                        onClick={() => setIsApiSettingsOpen(!isApiSettingsOpen)}
-                        className={`text-slate-400 hover:text-amber-400 transition p-1 rounded hover:bg-slate-800 ${isApiSettingsOpen ? 'text-amber-400 bg-slate-800' : ''}`}
-                      >
-                        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37-2.37a1.724 1.724 0 001.065-2.572c1.756-.426 1.756-2.924 0-3.35a1.724 1.724 0 00-1.066-2.573c-.94-1.543-.826-3.31-2.37-2.37a1.724 1.724 0 00-2.572-1.065c-.426-1.756-2.924-1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37 2.37a1.724 1.724 0 00-1.065 2.572c-1.756.426-1.756 2.924 0 3.35a1.724 1.724 0 001.066 2.573c.94 1.543-.826 3.31 2.37 2.37.996.608 2.296.07 2.572-1.065z" />
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
-                        </svg>
-                      </button>
                     </div>
-
-                    {isApiSettingsOpen && (
-                      <div className="mb-4 p-3 bg-slate-950 rounded-lg border border-slate-800 transition-all duration-200">
-                        <div className="flex justify-between items-center mb-1.5">
-                          <label className="block text-xs font-medium text-slate-400">NASA API Key</label>
-                          <button 
-                            type="button" 
-                            onClick={() => setApiKey('DEMO_KEY')} 
-                            className="text-[10px] text-amber-500 hover:underline"
-                          >
-                            Demo Key
-                          </button>
-                        </div>
-                        <input 
-                          type="text" 
-                          value={apiKey} 
-                          onChange={(e) => setApiKey(e.target.value)}
-                          placeholder="DEMO_KEY"
-                          className="w-full bg-slate-900 border border-slate-700 rounded px-3 py-1.5 text-xs text-slate-200 focus:outline-none focus:border-amber-500 font-mono"
-                        />
-                      </div>
-                    )}
 
                     <form onSubmit={handleFetchTrigger} className="space-y-4 font-sans">
                       <div>
@@ -963,7 +933,7 @@
                       {lang === 'hu' ? `Eseménynapló (${cmeList.length})` : `Solar Events Log (${cmeList.length})`}
                     </h2>
 
-                    <div className="space-y-3 overflow-y-auto flex-1 pr-1 max-h-[350px] lg:max-h-none font-sans">
+                    <div className="space-y-3 overflow-y-auto flex-1 pr-1 max-h-[350px] lg:max-h-none font-sans custom-scrollbar">
                       {cmeList.map((cme) => {
                         const isSelected = selectedCme?.activityID === cme.activityID;
                         const analysis = cme.cmeAnalyses?.[0] || {};
@@ -1093,14 +1063,14 @@
                                     <p className="text-[10px] text-amber-500 font-bold uppercase tracking-tight">
                                       {lang === 'hu' ? '1. Koordináták a kitöréskor:' : '1. Original Eruption coords:'}
                                     </p>
-                                    <p className="font-mono bg-slate-900/60 p-1 rounded border border-slate-800/50 font-sans">
+                                    <p className="font-mono bg-slate-900/60 p-1 rounded border border-slate-800/50 font-sans font-semibold">
                                       Lat: {projectCoordinatesToEndDate(hoveredCmeDisk, endDate).originalLat}°, Lon: {projectCoordinatesToEndDate(hoveredCmeDisk, endDate).originalLon}°
                                     </p>
                                     
                                     <p className="text-[10px] text-green-400 font-bold uppercase tracking-tight mt-1.5">
                                       {lang === 'hu' ? '2. Átszámított (Záró dátum szerint):' : '2. Projected (At End Date):'}
                                     </p>
-                                    <p className="font-mono bg-slate-900/60 p-1 rounded border border-slate-800/50 text-green-300 font-sans">
+                                    <p className="font-mono bg-slate-900/60 p-1 rounded border border-slate-800/50 text-green-300 font-sans font-semibold">
                                       Lat: {projectCoordinatesToEndDate(hoveredCmeDisk, endDate).latitude}°, Lon: {projectCoordinatesToEndDate(hoveredCmeDisk, endDate).longitude}°
                                     </p>
                                     <p className="text-[9px] text-slate-400 italic">
@@ -1340,8 +1310,8 @@
                     
                     <p className="text-sm text-slate-300 leading-relaxed mb-6">
                       {lang === 'hu' 
-                        ? 'A kiválasztott intervallum meghaladja a 14 napot. A nagy mennyiségű adat letöltése és feldolgozása hosszabb időt vehet igénybe és leterhelheti a hálózatot. Biztosan folytatni szeretné?' 
-                        : 'The chosen date range is larger than 14 days. Fetching and loading multiple datasets might take more time and strain network bandwidth. Are you sure you want to continue?'}
+                        ? `A kiválasztott intervallum meghaladja a ${MAXDATERANGE} napot. A nagy mennyiségű adat letöltése és feldolgozása hosszabb időt vehet igénybe és leterhelheti a hálózatot. Biztosan folytatni szeretné?` 
+                        : `The chosen date range is larger than ${MAXDATERANGE} days. Fetching and loading multiple datasets might take more time and strain network bandwidth. Are you sure you want to continue?`}
                     </p>
 
                     <div className="flex gap-3 justify-end">
@@ -1415,14 +1385,14 @@
                                 <p className="text-[10px] text-amber-500 font-bold uppercase tracking-tight">
                                   {lang === 'hu' ? 'Eredeti kitörési koordináták:' : 'Original coordinates:'}
                                 </p>
-                                <p className="font-mono bg-slate-900/60 p-1 rounded border border-slate-800/50 font-sans">
+                                <p className="font-mono bg-slate-900/60 p-1 rounded border border-slate-800/50 font-sans font-semibold">
                                   Lat: {projectCoordinatesToEndDate(hoveredCmeDisk, endDate).originalLat}°, Lon: {projectCoordinatesToEndDate(hoveredCmeDisk, endDate).originalLon}°
                                 </p>
                                 
                                 <p className="text-[10px] text-green-400 font-bold uppercase tracking-tight mt-1.5">
                                   {lang === 'hu' ? 'Záródátumra vetített koordináták:' : 'Projected (At End Date):'}
                                 </p>
-                                <p className="font-mono bg-slate-900/60 p-1 rounded border border-slate-800/50 text-green-300 font-sans">
+                                <p className="font-mono bg-slate-900/60 p-1 rounded border border-slate-800/50 text-green-300 font-sans font-semibold font-semibold">
                                   Lat: {projectCoordinatesToEndDate(hoveredCmeDisk, endDate).latitude}°, Lon: {projectCoordinatesToEndDate(hoveredCmeDisk, endDate).longitude}°
                                 </p>
                               </div>

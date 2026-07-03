@@ -316,7 +316,7 @@
                         // Feltételezzük, hogy az endDate, timeStr, lat, lon változók elérhetőek a külső scope-ból
                         //url = `http://localhost:8000/api/ephemeris?date=${dateStr}`;
                         //url = 'http://localhost:8000/api/ephemeris?date=2026-06-30&time=13:02:00&lat=47.4983&lon=20.0408';
-                        url = `http://sun-ephem.vercel.app/api/ephemeris?date=${dateStr}`;
+                        url = `https://sun-ephem.vercel.app/api/ephemeris?date=${dateStr}`;
                         console.debug(url);
                         response = await fetch(url);
 

@@ -37,9 +37,9 @@
         // ==========================================
         // GLOBÁLIS KONSTANSOK (KÖNNYEN MÓDOSÍTHATÓ)
         // ==========================================
-        const MAXDATERANGE = 3;        // Maximális engedélyezett alap-időintervallum napokban
+        const MAXDATERANGE = 5;        // Maximális engedélyezett alap-időintervallum napokban
         const API_KEY = "Qk8ff4ZQHXTGO5VRdOhYIvOymed0bcD1pFHSYtl6";    // NASA DONKI API kulcs
-        const APPVERSION = 1.9;        // Alkalmazás verziószáma
+        const APPVERSION = "2.0.1";        // Alkalmazás verziószáma
 
         // --- Preloaded Space Weather Data (June 30 - July 1, 2026) ---
         const DATA_EN = [
@@ -282,7 +282,9 @@
           { term: "Geomagnetic Storm", definition: "A major disturbance of Earth's magnetosphere caused by energy transfer from solar wind/CMEs, rated from G1 (Minor) to G5 (Extreme).", link: "https://www.swpc.noaa.gov/noaa-scales-explanation" },
           { term: "Active Regions and Sunspots", definition: "An area on the Sun's surface with highly concentrated and complex magnetic fields, producing solar flares and CMEs.", link: "https://www.weather.gov/fsd/sunspots" },
           { term: "Hungarian Astronomical Association", definition: "The Hungarian Astronomical Association (MCSE) is the largest and oldest group of amateur astronomers in Hungary.", link: "https://mcse.hu" },
-          { term: "MCSE Solar Section", definition: "The Solar Section of the Hungarian Astronomical Association (MCSE) is a group of amateur astronomers dedicated to Solar observation.", link: "https://nap.mcse.hu" }
+          { term: "MCSE Solar Section", definition: "The Solar Section of the Hungarian Astronomical Association (MCSE) is a group of amateur astronomers dedicated to Solar observation.", link: "https://nap.mcse.hu" },
+          { term: "Magyar Napfizikai Alapítvány (MNA)", definition: "To create an environment for Hungarian ground-based observations for solar and heliophysical scientific research and education. To carry out solar and heliophysical observations and to process.", link: "http://hspf.eu" }
+
         ];
 
         const GLOSSARY_HU = [
@@ -290,93 +292,118 @@
           { term: "Flerek", definition: "A napkitörések legintenzívebb kategóriája. Azonnali rádiózavarokat okozhat a Föld nappali féltekéjén.", link: "https://science.nasa.gov/sun/solar-storms-and-flares/" },
           { term: "Geomágneses vihar", definition: "A Föld mágneses pajzsának átmeneti perturbációja, amelyet a Napból kilökődött nagysebességű plazma okoz. G1 és G5 közötti fokozatú.", link: "https://www.swpc.noaa.gov/noaa-scales-explanation" },
           { term: "Aktív Régiók és napfoltok", definition: "Különösen erős és kuszált mágneses terekkel rendelkező zóna a Nap fotoszférájában, a napkitörések elsődleges fészke.", link: "https://www.weather.gov/fsd/sunspots" },
-          { term: "Magyar Csillagászati Egyesület", definition: "A Magyar Csillagászati Egyesület (MCSE) Magyarország legnagyobb és legrégebbi amatőrcsillagász csoportja.", link: "https://mcse.hu" },
-          { term: "MCSE Nap szakcsoport", definition: "A Magyar Csillagászati Egyesület Nap szakcsoportja a Napészlelés iránt érdeklődő amatőrcsillagászokat fog össze.", link: "https://nap.mcse.hu" }
+          { term: "Magyar Csillagászati Egyesület", definition: "A Magyar Csillagászati Egyesület (MCSE) Magyarország legnagyobb amatőrcsillagász egyesülete, célja a csillagászat megismertetése és megszerettetése.", link: "https://mcse.hu" },
+          { term: "MCSE Nap szakcsoport", definition: "A Magyar Csillagászati Egyesület Nap szakcsoportja a Napészlelés iránt érdeklődő amatőrcsillagászokat fog össze.", link: "https://nap.mcse.hu" },
+          { term: "Hungarian Solar Physics Foundation (MNA)", definition: "A magyar nap- és heliofizikai tudományos és oktatói földi típusú észlelések körülményeinek megteremtése, nap- és heliofizikai észlelések lebonyolítása és az így nyert adatok feldolgozása.", link: "http://hspf.eu" }
         ];
 
-        function computeSolarParameters(dateStr) {
-          const d = new Date(dateStr);
-          const dayOfYear = Math.floor((d - new Date(d.getFullYear(), 0, 0)) / (1000 * 60 * 60 * 24));
-          const P = 26.3 * Math.sin((2 * Math.PI * (dayOfYear - 105)) / 365.25);
-          const B0 = 7.25 * Math.sin((2 * Math.PI * (dayOfYear - 250)) / 365.25);
-          const baseEpochMs = new Date('2026-01-01T00:00:00Z').getTime();
-          const diffMs = d.getTime() - baseEpochMs;
-          const days = diffMs / (1000 * 60 * 60 * 24);
-          const rotationPeriodDays = 27.2753;
-          const L0 = (360 - ((days % rotationPeriodDays) / rotationPeriodDays) * 360) % 360;
+        async function computeSolarParameters(dateStr) {
+            let resultData;
+            let attempt = 0;
+            let url;
+            const maxAttempts = 3;
 
-          return {
-            P: parseFloat(P.toFixed(2)),
-            B0: parseFloat(B0.toFixed(2)),
-            L0: parseFloat(L0.toFixed(1))
-          };
-        }
+            console.debug("compute start");
 
-        function parseKsoResponse(text) {
-          let pVal = null;
-          let b0Val = null;
-          let l0Val = null;
+            try {
+                console.debug("attempt to call api");
+                let response;
 
-          // Attempt parsing response directly as JSON
-          try {
-            const data = JSON.parse(text);
-            pVal = data.P !== undefined ? data.P : data.p;
-            b0Val = data.B0 !== undefined ? data.B0 : (data.Bo !== undefined ? data.Bo : data.b0);
-            l0Val = data.Lon !== undefined ? data.Lon : (data.lon !== undefined ? data.lon : (data.L0 !== undefined ? data.L0 : data.l0));
-            
-            if (pVal !== undefined && b0Val !== undefined && l0Val !== undefined) {
-              return {
-                P: parseFloat(pVal),
-                B0: parseFloat(b0Val),
-                L0: parseFloat(l0Val),
-                source: 'KSO API (JSON)'
-              };
+                // Újrapróbálkozási logika
+                while (attempt < maxAttempts) {
+                    try {
+                        attempt++;
+                        // Feltételezzük, hogy az endDate, timeStr, lat, lon változók elérhetőek a külső scope-ból
+                        //url = `http://localhost:8000/api/ephemeris?date=${dateStr}`;
+                        //url = 'http://localhost:8000/api/ephemeris?date=2026-06-30&time=13:02:00&lat=47.4983&lon=20.0408';
+                        url = `http://sun-ephem.vercel.app/api/ephemeris?date=${dateStr}`;
+                        console.debug(url);
+                        response = await fetch(url);
+
+                        if (response.ok) break;
+
+                        if (attempt < maxAttempts) {
+                            await new Promise(resolve => setTimeout(resolve, attempt * 1000));
+                        }
+                    } catch (err) {
+                        if (attempt >= maxAttempts) throw err;
+                        await new Promise(resolve => setTimeout(resolve, attempt * 1000));
+                    }
+                }
+                console.debug("api call attempted");
+                // Ha sikeres volt az API hívás, feldolgozzuk
+                if (response && response.ok) {
+                    console.debug("api call responded");
+                    const data = await response.json();
+                    
+                    if (data) {
+                        // EGYSÉGESÍTÉS: Kivesszük a formázott értékeket, de tiszta P, B0, L0 neveket adunk nekik
+                        console.debug("api respond ephemeris");
+                        resultData = {
+                            P: data.efemeriszek.P,
+                            B0: data.efemeriszek.B0,
+                            L0: data.efemeriszek.L0,
+                            CR: data.efemeriszek.CR
+                        };
+                    } else {
+                        console.debug("api did not returne ephemeris");                        
+                    }
+                    
+                } else {
+                    console.debug("Repsones error");
+                    console.debug(response);
+                }
+            } catch (err) {
+                console.warn("API hiba történt, átváltás matematikai számításra...", err);
+                // opcionálisan itt lehetne setError
             }
-          } catch (e) {
-            // Text mode or custom formatting fallback
-          }
 
-          // Strict line parser
-          const lines = text.split(/[\n\r,;\s]+/);
-          for (const part of lines) {
-            const match = part.match(/^([A-Za-z0-9_]+)\s*[:=]?\s*(-?\d+(?:\.\d+)?)$/);
-            if (match) {
-              const key = match[1].toLowerCase();
-              const val = parseFloat(match[2]);
-              if (key === 'p') pVal = val;
-              if (key === 'b0' || key === 'bo') b0Val = val;
-              if (key === 'lon' || key === 'l0') l0Val = val;
+            if (!resultData) {
+                console.debug("No ephem from api -> running fallback math");
+                const d = new Date(dateStr);
+                const dayOfYear = Math.floor((d - new Date(d.getFullYear(), 0, 0)) / (1000 * 60 * 60 * 24));
+                const P = 26.3 * Math.sin((2 * Math.PI * (dayOfYear - 105)) / 365.25);
+                const B0 = 7.25 * Math.sin((2 * Math.PI * (dayOfYear - 250)) / 365.25);
+                const baseEpochMs = new Date('2026-01-01T00:00:00Z').getTime();
+                const diffMs = d.getTime() - baseEpochMs;
+                const days = diffMs / (1000 * 60 * 60 * 24);
+                const rotationPeriodDays = 27.2753;
+                const L0 = (360 - ((days % rotationPeriodDays) / rotationPeriodDays) * 360) % 360;
+
+                resultData = {
+                    P: `${P.toFixed(2)}°`,  // Fokjellel látjuk el, hogy egyezzen az API formátumával
+                    B0: `${B0.toFixed(2)}°`,
+                    L0: `${L0.toFixed(1)}°`,
+                    CR: "0"
+                };
+                console.debug("Fallback kész:", resultData);
             }
-          }
 
-          // Relaxed Regex searcher fallback
-          if (pVal === null || b0Val === null || l0Val === null) {
-            const searchKey = (keyName) => {
-              const regex = new RegExp(`(?:^|\\b|\\s)${keyName}\\s*[:=]?\\s*(-?\\d+(?:\\.\\d+)?)`, 'i');
-              const match = text.match(regex);
-              return match ? parseFloat(match[1]) : null;
-            };
-            if (pVal === null) pVal = searchKey('P');
-            if (b0Val === null) b0Val = searchKey('B0') || searchKey('Bo');
-            if (l0Val === null) l0Val = searchKey('Lon') || searchKey('L0');
-          }
-
-          if (pVal !== null && b0Val !== null && l0Val !== null) {
-            return {
-              P: pVal,
-              B0: b0Val,
-              L0: l0Val,
-              source: 'KSO API'
-            };
-          }
-
-          return null;
+            console.debug("use ephemeris", resultData);
+            return resultData;
         }
 
         function App() {
+            useEffect(() => {
+                console.debug("aap start");
+            }, []);
           const [lang, setLang] = useState('hu'); 
-          const [startDate, setStartDate] = useState('2026-06-30');
-          const [endDate, setEndDate] = useState('2026-07-01');
+//          const [startDate, setStartDate] = useState('2026-06-30');
+//          const [endDate, setEndDate] = useState('2026-07-01');
+
+            // 1. Lekérjük a mai napot YYYY-MM-DD formátumban
+            const today = new Date();
+            const todayStr = today.toISOString().split('T')[0];
+
+            // 2. Kiszámoljuk a mai nap - 5 napot
+            const pastDate = new Date();
+            pastDate.setDate(today.getDate() - MAXDATERANGE);
+            const pastDateStr = pastDate.toISOString().split('T')[0];
+
+            // 3. Beállítjuk a state-ek alapértelmezett értékeit
+            const [startDate, setStartDate] = useState(pastDateStr);
+            const [endDate, setEndDate] = useState(todayStr);
+            
           const [loading, setLoading] = useState(false);
           const [error, setError] = useState(null);
           
@@ -390,7 +417,7 @@
           const [hoveredCmeDisk, setHoveredCmeDisk] = useState(null);
           const [mousePos, setMousePos] = useState({ x: 0, y: 0 });
 
-          const [mapAllCmes, setMapAllCmes] = useState(true); 
+          const [mapAllCmes, setMapAllCmes] = useState(false); 
           const [fullscreenElement, setFullscreenElement] = useState(null); 
 
           const [showConfirmModal, setShowConfirmModal] = useState(false);
@@ -399,8 +426,20 @@
           const [apiRemaining, setApiRemaining] = useState(null);
           const [apiLimit, setApiLimit] = useState(null);
 
-          // State for dynamic Ephemeris from KSO or Analytical fallbacks
-          const [endParams, setEndParams] = useState({ P: 0, B0: 0, L0: 0, source: 'Loading...' });
+          const [endParams, setSolarData] = useState(null);
+          //const [dateStr, setDateStr] = useState(endDate);
+          const [refreshTrigger, setRefreshTrigger] = useState(0);
+          
+          useEffect(() => {
+              const loadParameters = async () => {
+                console.debug("DateStr", endDate);
+                  const ephemData = await computeSolarParameters(endDate);
+                  setSolarData(ephemData); // Elmentjük a state-be
+              };
+                
+              loadParameters();
+          }, [endDate, refreshTrigger]); // vagy amilyen változótól függ
+
 
           useEffect(() => {
             const backupData = lang === 'hu' ? DATA_HU : DATA_EN;
@@ -416,56 +455,6 @@
               return found ? found : prev;
             });
           }, [lang]);
-
-          useEffect(() => {
-            let isMounted = true;
-            const loadEphemeris = async () => {
-              const yyyymmdd = endDate.replace(/-/g, '');
-              const now = new Date();
-              const hh = String(now.getUTCHours()).padStart(2, '0');
-              const mm = String(now.getUTCMinutes()).padStart(2, '0');
-              const ss = String(now.getUTCSeconds()).padStart(2, '0');
-              const timeStr = `${hh}:${mm}:${ss}`;
-              
-              const lat = "47.4983";
-              const lon = "19.0408";
-              const proxyUrl = 'https://cors-anywhere.herokuapp.com/';
-              const targetUrl = `https://www.kso.ac.at/beobachtungen/ephem_api.php?date=${yyyymmdd}&time=${timeStr}&lat=${lat}&lon=${lon}`;
-              //const url = proxyUrl + targetUrl;
-              const url = targetUrl;
-              //const url = `https://localhost:8080/get-ephem?date=${yyyymmdd}&time=${timeStr}&lat=${lat}&lon=${lon}`;
-
-              try {
-                const res = await fetch(url);
-                if (!res.ok) throw new Error(`HTTP status ${res.status}`);
-                const text = await res.text();
-                const parsed = parseKsoResponse(text);
-                
-                if (parsed && isMounted) {
-                  setEndParams(parsed);
-                } else {
-                  throw new Error("Unable to parse KSO data structure");
-                }
-              } catch (err) {
-                console.warn("KSO API calculation unavailable, falling back to analytical model:", err);
-                if (isMounted) {
-                  const fallback = computeSolarParameters(endDate);
-                  setEndParams({
-                    P: fallback.P,
-                    B0: fallback.B0,
-                    L0: fallback.L0,
-                    //source: lang === 'hu' ? 'Analitikus (KSO hiba)' : 'Analytical (KSO Error)'
-                    source: lang === 'hu' ? url : 'Analytical (KSO Error)'
-                  });
-                }
-              }
-            };
-
-            loadEphemeris();
-            return () => {
-              isMounted = false;
-            };
-          }, [endDate, lang]);
 
           const orbitCanvasRef = useRef(null);
           const sunDiskCanvasRef = useRef(null);
@@ -495,6 +484,7 @@
           }, []);
 
           // --- Automatic Date Range Symmetrizer utilizing MAXDATERANGE constant ---
+          // Adjust only when START date changes
           const adjustEndDate = (start) => {
             const d = new Date(start);
             d.setDate(d.getDate() + MAXDATERANGE);
@@ -507,6 +497,7 @@
             setEndDate(adjustEndDate(val));
           };
 
+          // Leave Start Date untouched when END date is modified (allowing wider manually selected ranges)
           const handleEndDateChange = (e) => {
             setEndDate(e.target.value);
           };
@@ -703,7 +694,7 @@
             ctx.arc(centerX, centerY, sunRadius, 0, Math.PI * 2);
             ctx.fill();
 
-            const tiltAngleDeg = endParams.P;
+            const tiltAngleDeg = endParams?.P;
             const tiltRad = (tiltAngleDeg * Math.PI) / 180;
 
             ctx.save();
@@ -845,7 +836,7 @@
             const centerX = canvas.width / 2;
             const centerY = canvas.height / 2;
             const sunRadius = canvas.width * 0.34;
-            const tiltRad = (endParams.P * Math.PI) / 180;
+            const tiltRad = (endParams?.P * Math.PI) / 180;
 
             const getCanvasCoords = (lat, lon) => {
               const latRad = (lat * Math.PI) / 180;
@@ -888,14 +879,15 @@
               setShowConfirmModal(true);
             } else {
               executeFetch();
-            }
+            }            
           };
-
+          
           const executeFetch = async () => {
             setShowConfirmModal(false);
             setLoading(true);
             setError(null);
 
+            // Pre-emptive rate limit check to prevent request if we know it's at zero
             if (apiRemaining !== null && apiRemaining <= 0) {
               setError(lang === 'hu' 
                 ? "Túl sok kérés, próbálja 1-2 óra múlva." 
@@ -907,18 +899,28 @@
 
             try {
               let response;
+              let url = `https://api.nasa.gov/DONKI/CME?startDate=${startDate}&endDate=${endDate}&api_key=${API_KEY}`
               let attempt = 0;
               const maxAttempts = 3;
               
               while (attempt < maxAttempts) {
                 try {
-                  response = await fetch(`https://kauai.ccmc.gsfc.nasa.gov/DONKI/WS/get/CME?startDate=${startDate}&endDate=${endDate}`);
+                  //response = await fetch(`https://api.nasa.gov/DONKI/CME?startDate=${startDate}&endDate=${endDate}&api_key=${API_KEY}`);
+                  //const url = `https://kauai.ccmc.gsfc.nasa.gov/DONKI/WS/get/CME?startDate=${startDate}&endDate=${endDate}`
                   
+                  console.debug(url)
+                  response = await fetch(url);
+                  //https://kauai.ccmc.gsfc.nasa.gov/DONKI/WS/get/CME?startDate=2017-01-03&endDate=2017-01-03
+                  //https://api.nasa.gov/DONKI/CME?startDate=2017-01-03&endDate=2017-01-03&api_key=Qk8ff4ZQHXTGO5VRdOhYIvOymed0bcD1pFHSYtl6
+                  
+                  // Extract NASA's Rate-Limit headers
                   const limitHeader = response.headers.get('X-RateLimit-Limit');
                   const remainingHeader = response.headers.get('X-RateLimit-Remaining');
                   
                   if (limitHeader) setApiLimit(parseInt(limitHeader, 10));
                   if (remainingHeader) setApiRemaining(parseInt(remainingHeader, 10));
+                  console.info("ApiLimit", apiLimit);
+                  console.info("apiRemaining", apiRemaining);
 
                   if (response.status === 429 || (remainingHeader && parseInt(remainingHeader, 10) <= 0)) {
                     setApiRemaining(0);
@@ -933,7 +935,11 @@
                     await new Promise(resolve => setTimeout(resolve, attempt * 1000));
                   }
                 } catch (err) {
-                  if (err.message === "RATE_LIMIT_EXCEEDED") throw err;
+                  //if (err.message === "RATE_LIMIT_EXCEEDED") throw err;
+                  if (err.message === "RATE_LIMIT_EXCEEDED") {
+                    url = `https://kauai.ccmc.gsfc.nasa.gov/DONKI/WS/get/CME?startDate=${startDate}&endDate=${endDate}`
+                    attempt=0;
+                  } 
                   attempt++;
                   if (attempt >= maxAttempts) throw err;
                   await new Promise(resolve => setTimeout(resolve, attempt * 1000));
@@ -964,14 +970,21 @@
                 setError(lang === 'hu' ? 'A NASA API lekérdezés meghiúsult. Offline mód aktív.' : 'NASA API call failed. Using offline simulation backup.');
               }
               
+              // Maintain consistent layout state with backups on error
               const fallback = lang === 'hu' ? DATA_HU : DATA_EN;
               setCmeList(fallback);
               setSelectedCme(fallback[0]);
             } finally {
               setLoading(false);
             }
+            setRefreshTrigger(prev => prev + 1);
           };
 
+          // Automatikus lekérdezés az oldal betöltődésekor
+          useEffect(() => {
+            executeFetch();
+          }, []);
+          
           return (
             <div className="min-h-screen bg-slate-950 text-slate-100 flex flex-col font-sans selection:bg-amber-500 selection:text-slate-950">
               
@@ -987,7 +1000,7 @@
                       CME Visualizer ({APPVERSION})
                     </h1>
                     <p className="text-xs text-slate-400 font-mono">
-                      {lang === 'hu' ? 'Koronakidobódás (CME) szimulátor' : 'Coronal Mass Ejection (CME) Space Weather Observatory'}
+                      {lang === 'hu' ? 'Koronakidobódás (CME) szimulátor' : 'Coronal Mass Ejection (CME)'}
                     </p>
                   </div>
                 </div>
@@ -1140,7 +1153,7 @@
                         activeTab === 'visualizer' ? 'bg-slate-800 text-amber-400 border border-slate-700' : 'text-slate-400 hover:text-slate-200'
                       }`}
                     >
-                      {lang === 'hu' ? 'Napkorong & Szimulátor' : 'Sun Disk & Orbit Map'}
+                      {lang === 'hu' ? 'Napkorong & CME Terjedés' : 'Solar Disk & CME Propagation'}
                     </button>
                     <button
                       onClick={() => setActiveTab('raw_json')}
@@ -1168,25 +1181,40 @@
                         <div className="bg-slate-900 border border-slate-800 rounded-xl p-5 shadow-xl flex flex-col items-center relative justify-between">
                           <div className="w-full flex justify-between items-center mb-4">
                             <h3 className="text-xs font-bold uppercase tracking-wider text-slate-400">
-                              {lang === 'hu' ? 'Napkorong & Forrás' : 'Solar disk & coordinates'}
+                              {lang === 'hu' ? 'Napkorong & koordináták' : 'Solar disk & coordinates'}
                             </h3>
-                            <div className="flex items-center gap-2">
-                              <button 
-                                onClick={() => setMapAllCmes(!mapAllCmes)}
-                                className={`text-[10px] px-2 py-0.5 rounded border transition ${
-                                  mapAllCmes ? 'bg-amber-500/20 text-amber-300 border-amber-500/30' : 'bg-slate-800 text-slate-400 border-slate-700'
-                                }`}
-                              >
-                                {mapAllCmes ? (lang === 'hu' ? 'Összes' : 'Map All') : (lang === 'hu' ? 'Kijelölt' : 'Selected')}
-                              </button>
+                                <div className="flex items-center gap-2">
+                                  {/* 1. Összes / Kijelölt gomb tooltippel */}
+                                  <div className="relative group">
+                                    <div className="absolute bottom-full right-0 mb-2 hidden group-hover:block bg-slate-800 text-slate-200 text-[11px] py-1 px-2 rounded shadow-xl border border-slate-700 whitespace-nowrap z-50 pointer-events-none">
+                                      {lang === 'hu' ? 'Váltás az összes vagy csak a kijelölt CME megjelenítése között' : 'Toggle between all or only the selected CME profile'}
+                                      <div className="absolute top-full right-3 border-4 border-transparent border-t-slate-800"></div>
+                                    </div>
+                                    <button 
+                                      onClick={() => setMapAllCmes(!mapAllCmes)}
+                                      className={`text-[10px] px-2 py-0.5 rounded border transition ${
+                                        mapAllCmes ? 'bg-amber-500/20 text-amber-300 border-amber-500/30' : 'bg-slate-800 text-slate-400 border-slate-700'
+                                      }`}
+                                    >
+                                      {mapAllCmes ? (lang === 'hu' ? 'Összes' : 'Map All') : (lang === 'hu' ? 'Kijelölt' : 'Selected')}
+                                    </button>
+                                  </div>
 
-                              <button 
-                                onClick={() => setFullscreenElement(fullscreenElement === 'disk' ? null : 'disk')}
-                                className="text-slate-400 hover:text-slate-200 p-1.5 rounded bg-slate-800 hover:bg-slate-700"
-                              >
-                                <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M4 8V4m0 0h4M4 4l5 5m11-5h-4m4 0v4m0-4l-5 5M4 20v-4m0 4h4m-4 0l5-5m11 5h-4m4 0v-4m0 4l-5-5" /></svg>
-                              </button>
-                            </div>
+                                  {/* 2. Napkorong Fullscreen gomb tooltippel */}
+                                  <div className="relative group">
+                                    <div className="absolute bottom-full right-0 mb-2 hidden group-hover:block bg-slate-800 text-slate-200 text-[11px] py-1 px-2 rounded shadow-xl border border-slate-700 whitespace-nowrap z-50 pointer-events-none">
+                                      {lang === 'hu' ? 'Napkorong megnyitása teljes képernyőn' : 'Open Solar Disk in full screen'}
+                                      <div className="absolute top-full right-3 border-4 border-transparent border-t-slate-800"></div>
+                                    </div>
+                                    <button 
+                                      onClick={() => setFullscreenElement(fullscreenElement === 'disk' ? null : 'disk')}
+                                      className="text-slate-400 hover:text-slate-200 p-1.5 rounded bg-slate-800 hover:bg-slate-700 flex"
+                                    >
+                                      <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M4 8V4m0 0h4M4 4l5 5m11-5h-4m4 0v4m0-4l-5 5M4 20v-4m0 4h4m-4 0l5-5m11 5h-4m4 0v-4m0 4l-5-5" /></svg>
+                                    </button>
+                                  </div>
+                                </div>
+
                           </div>
 
                           <div className="relative border border-slate-800/80 rounded-lg overflow-hidden bg-slate-950 w-full flex justify-center">
@@ -1226,7 +1254,7 @@
                                     </p>
                                     
                                     <p className="text-[10px] text-green-400 font-bold uppercase tracking-tight mt-1.5">
-                                      {lang === 'hu' ? '2. Átszámított (Záró dátum szerint):' : '2. Projected (At End Date):'}
+                                      {lang === 'hu' ? '2. Megjelenített dátumra:' : '2. Projected (At End Date):'}
                                     </p>
                                     <p className="font-mono bg-slate-900/60 p-1 rounded border border-slate-800/50 text-green-300 font-sans font-semibold">
                                       Lat: {projectCoordinatesToEndDate(hoveredCmeDisk, endDate).latitude}°, Lon: {projectCoordinatesToEndDate(hoveredCmeDisk, endDate).longitude}°
@@ -1244,21 +1272,21 @@
                           
                           <div className="w-full mt-3 bg-slate-950/80 p-3 rounded-lg border border-slate-800 text-[11px] text-slate-300 space-y-1 flex flex-col">
                             <div className="flex justify-between items-center text-slate-400 font-semibold border-b border-slate-900 pb-1 mb-1">
-                              <span>{lang === 'hu' ? 'Napfizikai adatok (Budapest):' : 'Solar Ephemeris (Budapest):'}</span>
-                              <span className="text-amber-500 font-mono text-[9px] bg-slate-900/80 px-1.5 py-0.5 rounded border border-slate-800/60">{endParams.source}</span>
+                              <span>{lang === 'hu' ? 'Számított napfizikai értékek:' : 'Calculated Ephemeris:'}</span>
+                              <span className="text-amber-500 font-mono">{endDate}</span>
                             </div>
                             <div className="grid grid-cols-3 text-center">
                               <div>
-                                <span className="block text-slate-500 text-[10px]">P (Axis Angle)</span>
-                                <span className="font-mono text-green-400 font-semibold">{typeof endParams.P === 'number' ? endParams.P.toFixed(2) : endParams.P}°</span>
-                              </div>
-                              <div>
                                 <span className="block text-slate-500 text-[10px]">B₀ (Tilt)</span>
-                                <span className="font-mono text-green-400 font-semibold">{typeof endParams.B0 === 'number' ? endParams.B0.toFixed(2) : endParams.B0}°</span>
+                                <span className="font-mono text-green-400 font-semibold">{endParams?.B0}°</span>
                               </div>
                               <div>
                                 <span className="block text-slate-500 text-[10px]">L₀ (Carrington)</span>
-                                <span className="font-mono text-green-400 font-semibold">{typeof endParams.L0 === 'number' ? endParams.L0.toFixed(1) : endParams.L0}°</span>
+                                <span className="font-mono text-green-400 font-semibold">{endParams?.L0}°</span>
+                              </div>
+                              <div>
+                                <span className="block text-slate-500 text-[10px]">P (Axis Angle)</span>
+                                <span className="font-mono text-green-400 font-semibold">{endParams?.P}°</span>
                               </div>
                             </div>
                           </div>
@@ -1269,31 +1297,55 @@
                             <h3 className="text-xs font-bold uppercase tracking-wider text-slate-400">
                               {lang === 'hu' ? 'CME terjedés' : 'CME Propagation'}
                             </h3>
-                            <div className="flex items-center gap-2">
-                              <button 
-                                onClick={() => setIsSimPlaying(!isSimPlaying)}
-                                className="p-1 rounded bg-slate-800 hover:bg-slate-700 text-amber-400"
-                              >
-                                {isSimPlaying ? (
-                                  <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 20 20"><path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zM7 8a1 1 0 012 0v4a1 1 0 11-2 0V8zm5-1a1 1 0 00-1 1v4a1 1 0 102 0V8a1 1 0 00-1-1z" clipRule="evenodd" /></svg>
-                                ) : (
-                                  <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 20 20"><path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM9.555 7.168A1 1 0 008 8v4a1 1 0 001.555.832l3-2a1 1 0 000-1.664l-3-2z" clipRule="evenodd" /></svg>
-                                )}
-                              </button>
-                              <button 
-                                onClick={() => setSimTime(0)}
-                                className="p-1 rounded bg-slate-800 hover:bg-slate-700 text-slate-300"
-                              >
-                                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M4 4v5h.582m15.356 2A8.001 8.001 0 1121.21 15H18.5" /></svg>
-                              </button>
+                                <div className="flex items-center gap-2">
+                                  {/* 1. Play / Pause gomb tooltippel */}
+                                  <div className="relative group">
+                                    <div className="absolute bottom-full right-0 mb-2 hidden group-hover:block bg-slate-800 text-slate-200 text-[11px] py-1 px-2 rounded shadow-xl border border-slate-700 whitespace-nowrap z-50 pointer-events-none">
+                                      {isSimPlaying ? (lang === 'hu' ? 'Szimuláció megállítása' : 'Pause simulation') : (lang === 'hu' ? 'Szimuláció indítása' : 'Play simulation')}
+                                      <div className="absolute top-full right-3 border-4 border-transparent border-t-slate-800"></div>
+                                    </div>
+                                    <button 
+                                      onClick={() => setIsSimPlaying(!isSimPlaying)}
+                                      className="p-1 rounded bg-slate-800 hover:bg-slate-700 text-amber-400 flex"
+                                    >
+                                      {isSimPlaying ? (
+                                        <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 20 20"><path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zM7 8a1 1 0 012 0v4a1 1 0 11-2 0V8zm5-1a1 1 0 00-1 1v4a1 1 0 102 0V8a1 1 0 00-1-1z" clipRule="evenodd" /></svg>
+                                      ) : (
+                                        <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 20 20"><path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM9.555 7.168A1 1 0 008 8v4a1 1 0 001.555.832l3-2a1 1 0 000-1.664l-3-2z" clipRule="evenodd" /></svg>
+                                      )}
+                                    </button>
+                                  </div>
 
-                              <button 
-                                onClick={() => setFullscreenElement(fullscreenElement === 'orbit' ? null : 'orbit')}
-                                className="text-slate-400 hover:text-slate-200 p-1.5 rounded bg-slate-800 hover:bg-slate-700"
-                              >
-                                <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M4 8V4m0 0h4M4 4l5 5m11-5h-4m4 0v4m0-4l-5 5M4 20v-4m0 4h4m-4 0l5-5m11 5h-4m4 0v-4m0 4l-5-5" /></svg>
-                              </button>
-                            </div>
+                                  {/* 2. Animáció visszaállítása gomb tooltippel */}
+                                  <div className="relative group">
+                                    <div className="absolute bottom-full right-0 mb-2 hidden group-hover:block bg-slate-800 text-slate-200 text-[11px] py-1 px-2 rounded shadow-xl border border-slate-700 whitespace-nowrap z-50 pointer-events-none">
+                                      {lang === 'hu' ? 'Idő visszaállítása a kezdetre (0h)' : 'Reset propagation time to 0h'}
+                                      <div className="absolute top-full right-3 border-4 border-transparent border-t-slate-800"></div>
+                                    </div>
+                                    <button 
+                                      onClick={() => setSimTime(0)}
+                                      className="p-1 rounded bg-slate-800 hover:bg-slate-700 text-slate-300 flex"
+                                    >
+                                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M4 4v5h.582m15.356 2A8.001 8.001 0 1121.21 15H18.5" /></svg>
+                                    </button>
+                                  </div>
+
+                                  {/* 3. Pályadiagram Fullscreen gomb tooltippel */}
+                                  <div className="relative group">
+                                    <div className="absolute bottom-full right-0 mb-2 hidden group-hover:block bg-slate-800 text-slate-200 text-[11px] py-1 px-2 rounded shadow-xl border border-slate-700 whitespace-nowrap z-50 pointer-events-none">
+                                      {lang === 'hu' ? 'Pályadiagram megnyitása teljes képernyőn' : 'Open Orbit Map in full screen'}
+                                      <div className="absolute top-full right-3 border-4 border-transparent border-t-slate-800"></div>
+                                    </div>
+                                    <button 
+                                      onClick={() => setFullscreenElement(fullscreenElement === 'orbit' ? null : 'orbit')}
+                                      className="text-slate-400 hover:text-slate-200 p-1.5 rounded bg-slate-800 hover:bg-slate-700 flex"
+                                    >
+                                      <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M4 8V4m0 0h4M4 4l5 5m11-5h-4m4 0v4m0-4l-5 5M4 20v-4m0 4h4m-4 0l5-5m11 5h-4m4 0v-4m0 4l-5-5" /></svg>
+                                    </button>
+                                  </div>
+                                </div>
+                            
+                            
                           </div>
 
                           <div className="relative border border-slate-800/80 rounded-lg overflow-hidden bg-slate-950 w-full flex justify-center">
@@ -1334,7 +1386,7 @@
                         <div>
                           <div className="flex justify-between items-center mb-3">
                             <span className="text-[10px] font-bold text-amber-500 tracking-widest uppercase">
-                              {lang === 'hu' ? 'Esemény Spektrális és Fizikai Adatai' : 'CME Physical & Spectral parameters'}
+                              {lang === 'hu' ? 'Esemény  adatai' : 'CME parameters'}
                             </span>
                             <a 
                               href={selectedCme?.link} 
@@ -1406,7 +1458,7 @@
                         <div>
                           <h3 className="text-sm font-bold text-slate-300 uppercase tracking-wider">{lang === 'hu' ? 'NASA API JSON Adatok' : 'NASA API JSON Response'}</h3>
                           <p className="text-xs text-slate-500">
-                            {lang === 'hu' ? 'Valós idejű válaszadatok a Space Weather adatbázisból' : 'Serialized parameters directly from DONKI systems'}
+                            {lang === 'hu' ? 'Valós adatok a DONKI adatbázisból' : 'Serialized parameters directly from DONKI systems'}
                           </p>
                         </div>
                         <button
@@ -1428,7 +1480,7 @@
                   {activeTab === 'glossary' && (
                     <div className="bg-slate-900 border border-slate-800 rounded-xl p-5 shadow-xl font-sans">
                       <h3 className="text-sm font-bold text-slate-300 uppercase tracking-wider mb-4">
-                        {lang === 'hu' ? 'Űridőjárás Fogalomtár & Tudományos Források' : 'Space Weather Reference Library'}
+                        {lang === 'hu' ? 'Űridőjárás Fogalomtár & Források' : 'Space Weather References'}
                       </h3>
                       
                       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -1444,7 +1496,7 @@
                               rel="noopener noreferrer" 
                               className="text-[10px] text-amber-500 hover:underline flex items-center gap-1 mt-2 self-start"
                             >
-                              {lang === 'hu' ? 'Hivatalos kutatás' : 'Official research'} ↗
+                              {lang === 'hu' ? 'Bővebben' : 'More info'} ↗
                             </a>
                           </div>
                         ))}
@@ -1503,8 +1555,8 @@
                   <div className="text-center mb-4">
                     <h3 className="text-sm font-mono tracking-widest text-amber-400 uppercase">
                       {fullscreenElement === 'disk' 
-                        ? (lang === 'hu' ? 'Napkorong Vetület (Interaktív)' : 'Interactive Sun Disk Projection')
-                        : (lang === 'hu' ? 'Heliocentrikus Pálya Terjedés' : 'Heliocentric Orbit Propagation')
+                        ? (lang === 'hu' ? 'Napkorong (mutass a jelölésre)' : 'Solar Disk (Hover mouse on CME)')
+                        : (lang === 'hu' ? 'CEM Terjedés' : 'CME  Propagation')
                       }
                     </h3>
                   </div>
@@ -1550,7 +1602,7 @@
                                 <p className="text-[10px] text-green-400 font-bold uppercase tracking-tight mt-1.5">
                                   {lang === 'hu' ? 'Záródátumra vetített koordináták:' : 'Projected (At End Date):'}
                                 </p>
-                                <p className="font-mono bg-slate-900/60 p-1 rounded border border-slate-800/50 text-green-300 font-sans font-semibold">
+                                <p className="font-mono bg-slate-900/60 p-1 rounded border border-slate-800/50 text-green-300 font-sans font-semibold font-semibold font-semibold">
                                   Lat: {projectCoordinatesToEndDate(hoveredCmeDisk, endDate).latitude}°, Lon: {projectCoordinatesToEndDate(hoveredCmeDisk, endDate).longitude}°
                                 </p>
                               </div>
@@ -1570,8 +1622,8 @@
                 </div>
               )}
 
-              <footer className="bg-slate-950 border-t border-slate-900 px-6 py-4 text-center text-xs text-slate-500 font-sans">
-                <p>© 2026 <a href="https://nap.mcse.hu/" target="_blank" rel="noopener noreferrer" className="text-amber-400 hover:underline">MCSE Napészlelő Szakcsoport</a>. Forrás/Source: NASA Space Weather Database (DONKI) & Kanzelhöhe Observatory (KSO) Ephemeris.</p>
+              <footer className="bg-slate-950 border-t border-slate-900 px-6 py-4 text-center text-s text-slate-500 font-sans">
+                <p>© 2026 Boldi, <a href="https://nap.mcse.hu/" target="_blank" rel="noopener noreferrer" className="text-amber-400 hover:underline">MCSE Napészlelő Szakcsoport</a>  Adat Forrás/Data Source: NASA Space Weather Database of Notifications, Knowledge, and Information (DONKI).</p>
               </footer>
             </div>
           );

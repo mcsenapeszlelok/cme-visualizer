@@ -1,0 +1,1660 @@
+<!DOCTYPE html>
+<html lang="hu">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>CME Visualizer</title>
+     <!-- (C) Boldi, https://nap.mcse.hu | GNU GPL 3.0  -->
+    <!-- Tailwind CSS CDN -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="shortcut icon" href="favicon.ico" type="image/x-icon">
+    <!-- React and ReactDOM production builds from CDN -->
+    <script src="https://unpkg.com/react@18/umd/react.production.min.js" crossorigin></script>
+    <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js" crossorigin></script>
+    <!-- Babel for in-browser JSX parsing -->
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    <style>
+        /* Custom scrollbar to match the dark slate design */
+        .custom-scrollbar::-webkit-scrollbar {
+            width: 6px;
+        }
+        .custom-scrollbar::-webkit-scrollbar-track {
+            background: #020617;
+        }
+        .custom-scrollbar::-webkit-scrollbar-thumb {
+            background: #1e293b;
+            border-radius: 3px;
+        }
+        .custom-scrollbar::-webkit-scrollbar-thumb:hover {
+            background: #334155;
+        }
+        
+        /* Custom white arrow indicator for date pickers on desktop / laptops */
+        input[type="date"]::-webkit-calendar-picker-indicator {
+            background-image: url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"></polyline></svg>');
+            background-position: center;
+            background-repeat: no-repeat;
+            cursor: pointer;
+            filter: invert(0);
+        }
+    </style>
+</head>
+<body class="bg-slate-950 text-slate-100 min-h-screen">
+    <div id="root"></div>
+
+    <script type="text/babel">
+        const { useState, useEffect, useRef } = React;
+
+        // ==========================================
+        // GLOBÁLIS KONSTANSOK (KÖNNYEN MÓDOSÍTHATÓ)
+        // ==========================================
+        const MAXDATERANGE = 5;        // Maximális engedélyezett alap-időintervallum napokban
+        const API_KEY = "Qk8ff4ZQHXTGO5VRdOhYIvOymed0bcD1pFHSYtl6";    // NASA DONKI API kulcs
+        const APPVERSION = "2.0.1";        // Alkalmazás verziószáma
+
+        // --- Preloaded Space Weather Data (June 30 - July 1, 2026) ---
+        const DATA_EN = [
+          {
+            activityID: "2026-06-30T15:00:00-CME-001",
+            startTime: "2026-06-30T15:00Z",
+            sourceLocation: "N16W15",
+            activeRegionNum: 14479,
+            link: "https://kauai.ccmc.gsfc.nasa.gov/DONKI/view/CME/47201/1",
+            note: "Faint CME observed off the west limb. Low-latitude eruption, source region estimated near AR14479.",
+            instruments: [{ displayName: "SOHO: LASCO/C2" }, { displayName: "STEREO A: COR2" }],
+            cmeAnalyses: [{
+              time21_5: "2026-06-30T15:30Z",
+              speed: 387,
+              type: "C",
+              halfAngle: 35,
+              latitude: 16,
+              longitude: 15,
+              isMostAccurate: true,
+              associatedFeatures: []
+            }]
+          },
+          {
+            activityID: "2026-06-30T21:45:00-CME-001",
+            startTime: "2026-06-30T21:45Z",
+            sourceLocation: "N17W18",
+            activeRegionNum: 14479,
+            link: "https://kauai.ccmc.gsfc.nasa.gov/DONKI/view/CME/47210/1",
+            note: "High-speed halo CME associated with an X1.1 solar flare in Active Region 14479. Strong geomagnetic storm watch (G3) issued.",
+            instruments: [{ displayName: "SOHO: LASCO/C2" }, { displayName: "SOHO: LASCO/C3" }, { displayName: "SDO: AIA" }],
+            cmeAnalyses: [{
+              time21_5: "2026-06-30T22:30Z",
+              speed: 1236,
+              type: "S",
+              halfAngle: 90,
+              latitude: 17,
+              longitude: 18,
+              isMostAccurate: true,
+              associatedFeatures: [{ associatedFeatureID: "2026-06-30T21:45:00-FLR-001", classType: "X1.1" }]
+            }]
+          },
+          {
+            activityID: "2026-07-01T00:38:00-CME-001",
+            startTime: "2026-07-01T00:38Z",
+            sourceLocation: "S12E40",
+            activeRegionNum: 14482,
+            link: "https://kauai.ccmc.gsfc.nasa.gov/DONKI/view/CME/47215/1",
+            note: "Slow solar eruption directed eastwards. Minimal Earth threat expected.",
+            instruments: [{ displayName: "SOHO: LASCO/C2" }, { displayName: "GOES: CCOR-1" }],
+            cmeAnalyses: [{
+              time21_5: "2026-07-01T01:12Z",
+              speed: 455,
+              type: "C",
+              halfAngle: 40,
+              latitude: -12,
+              longitude: -40,
+              isMostAccurate: true,
+              associatedFeatures: []
+            }]
+          },
+          {
+            activityID: "2026-07-01T03:23:00-CME-001",
+            startTime: "2026-07-01T03:23Z",
+            sourceLocation: "N08W55",
+            activeRegionNum: 14477,
+            link: "https://kauai.ccmc.gsfc.nasa.gov/DONKI/view/CME/47218/1",
+            note: "Westward limb event. Backside component possible.",
+            instruments: [{ displayName: "SOHO: LASCO/C2" }],
+            cmeAnalyses: [{
+              time21_5: "2026-07-01T04:00Z",
+              speed: 502,
+              type: "C",
+              halfAngle: 38,
+              latitude: 8,
+              longitude: 55,
+              isMostAccurate: true,
+              associatedFeatures: []
+            }]
+          },
+          {
+            activityID: "2026-07-01T03:48:00-CME-001",
+            startTime: "2026-07-01T03:48Z",
+            sourceLocation: "S20W10",
+            activeRegionNum: 14480,
+            link: "https://kauai.ccmc.gsfc.nasa.gov/DONKI/view/CME/47220/1",
+            note: "Southern hemisphere eruption with faint Earth-directed shock flank.",
+            instruments: [{ displayName: "SOHO: LASCO/C2" }, { displayName: "STEREO A: COR2" }],
+            cmeAnalyses: [{
+              time21_5: "2026-07-01T04:30Z",
+              speed: 464,
+              type: "C",
+              halfAngle: 42,
+              latitude: -20,
+              longitude: 10,
+              isMostAccurate: true,
+              associatedFeatures: []
+            }]
+          },
+          {
+            activityID: "2026-07-01T12:12:00-CME-001",
+            startTime: "2026-07-01T12:12Z",
+            sourceLocation: "N13W33",
+            activeRegionNum: 14479,
+            link: "https://kauai.ccmc.gsfc.nasa.gov/DONKI/view/CME/47225/1",
+            note: "Faint front to the NNW in SOHO LASCO C2 associated with an M1.0 class flare from AR 14479 (N13W33) that peaked at 11:25Z.",
+            instruments: [{ displayName: "SOHO: LASCO/C2" }, { displayName: "GOES: CCOR-1" }],
+            cmeAnalyses: [{
+              time21_5: "2026-07-01T12:45Z",
+              speed: 372,
+              type: "C",
+              halfAngle: 45,
+              latitude: 13,
+              longitude: 33,
+              isMostAccurate: true,
+              associatedFeatures: [{ associatedFeatureID: "2026-07-01T11:25:00-FLR-001", classType: "M1.0" }]
+            }]
+          }
+        ];
+
+        const DATA_HU = [
+          {
+            activityID: "2026-06-30T15:00:00-CME-001",
+            startTime: "2026-06-30T15:00Z",
+            sourceLocation: "N16W15",
+            activeRegionNum: 14479,
+            link: "https://kauai.ccmc.gsfc.nasa.gov/DONKI/view/CME/47201/1",
+            note: "Halvány CME a nyugati peremen. Alacsony szélességi kitörés, a forrásrégió az AR14479 közelében van.",
+            instruments: [{ displayName: "SOHO: LASCO/C2" }, { displayName: "STEREO A: COR2" }],
+            cmeAnalyses: [{
+              time21_5: "2026-06-30T15:30Z",
+              speed: 387,
+              type: "C",
+              halfAngle: 35,
+              latitude: 16,
+              longitude: 15,
+              isMostAccurate: true,
+              associatedFeatures: []
+            }]
+          },
+          {
+            activityID: "2026-06-30T21:45:00-CME-001",
+            startTime: "2026-06-30T21:45Z",
+            sourceLocation: "N17W18",
+            activeRegionNum: 14479,
+            link: "https://kauai.ccmc.gsfc.nasa.gov/DONKI/view/CME/47210/1",
+            note: "Nagy sebességű halo CME az AR14479 aktív régióból, egy X1.1 erősségű napkitörés kíséretében. Erős geomágneses viharriasztás (G3) kiadva.",
+            instruments: [{ displayName: "SOHO: LASCO/C2" }, { displayName: "SOHO: LASCO/C3" }, { displayName: "SDO: AIA" }],
+            cmeAnalyses: [{
+              time21_5: "2026-06-30T22:30Z",
+              speed: 1236,
+              type: "S",
+              halfAngle: 90,
+              latitude: 17,
+              longitude: 18,
+              isMostAccurate: true,
+              associatedFeatures: [{ associatedFeatureID: "2026-06-30T21:45:00-FLR-001", classType: "X1.1" }]
+            }]
+          },
+          {
+            activityID: "2026-07-01T00:38:00-CME-001",
+            startTime: "2026-07-01T00:38Z",
+            sourceLocation: "S12E40",
+            activeRegionNum: 14482,
+            link: "https://kauai.ccmc.gsfc.nasa.gov/DONKI/view/CME/47215/1",
+            note: "Lassú, kelet felé irányuló napkitörés. Minimális veszély a Földre nézve.",
+            instruments: [{ displayName: "SOHO: LASCO/C2" }, { displayName: "GOES: CCOR-1" }],
+            cmeAnalyses: [{
+              time21_5: "2026-07-01T01:12Z",
+              speed: 455,
+              type: "C",
+              halfAngle: 40,
+              latitude: -12,
+              longitude: -40,
+              isMostAccurate: true,
+              associatedFeatures: []
+            }]
+          },
+          {
+            activityID: "2026-07-01T03:23:00-CME-001",
+            startTime: "2026-07-01T03:23Z",
+            sourceLocation: "N08W55",
+            activeRegionNum: 14477,
+            link: "https://kauai.ccmc.gsfc.nasa.gov/DONKI/view/CME/47218/1",
+            note: "Nyugati perem-esemény, feltételezhető hátoldali terjedéssel.",
+            instruments: [{ displayName: "SOHO: LASCO/C2" }],
+            cmeAnalyses: [{
+              time21_5: "2026-07-01T04:00Z",
+              speed: 502,
+              type: "C",
+              halfAngle: 38,
+              latitude: 8,
+              longitude: 55,
+              isMostAccurate: true,
+              associatedFeatures: []
+            }]
+          },
+          {
+            activityID: "2026-07-01T03:48:00-CME-001",
+            startTime: "2026-07-01T03:48Z",
+            sourceLocation: "S20W10",
+            activeRegionNum: 14480,
+            link: "https://kauai.ccmc.gsfc.nasa.gov/DONKI/view/CME/47220/1",
+            note: "Déli féltekei kitörés, enyhe Föld felé irányuló lökéshullám-komponenssel.",
+            instruments: [{ displayName: "SOHO: LASCO/C2" }, { displayName: "STEREO A: COR2" }],
+            cmeAnalyses: [{
+              time21_5: "2026-07-01T04:30Z",
+              speed: 464,
+              type: "C",
+              halfAngle: 42,
+              latitude: -20,
+              longitude: 10,
+              isMostAccurate: true,
+              associatedFeatures: []
+            }]
+          },
+          {
+            activityID: "2026-07-01T12:12:00-CME-001",
+            startTime: "2026-07-01T12:12Z",
+            sourceLocation: "N13W33",
+            activeRegionNum: 14479,
+            link: "https://kauai.ccmc.gsfc.nasa.gov/DONKI/view/CME/47225/1",
+            note: "Halvány front észak-északnyugaton a SOHO LASCO C2 felvételein, egy M1.0 osztályú napkitörés kíséretében az AR 14479 régióból.",
+            instruments: [{ displayName: "SOHO: LASCO/C2" }, { displayName: "GOES: CCOR-1" }],
+            cmeAnalyses: [{
+              time21_5: "2026-07-01T12:45Z",
+              speed: 372,
+              type: "C",
+              halfAngle: 45,
+              latitude: 13,
+              longitude: 33,
+              isMostAccurate: true,
+              associatedFeatures: [{ associatedFeatureID: "2026-07-01T11:25:00-FLR-001", classType: "M1.0" }]
+            }]
+          }
+        ];
+
+        const GLOSSARY_EN = [
+          { term: "CME (Coronal Mass Ejection)", definition: "A massive bubble of solar plasma and magnetic field launched into space. Triggers geomagnetic storms and aurorae upon reaching Earth.", link: "https://www.swpc.noaa.gov/phenomena/coronal-mass-ejections" },
+          { term: "Flares", definition: "At the two ends of magnetic field lines with opposite polarities, the adjacent magnetic fields interconnect, a process during which a significant amount of energy can be released.", link: "https://science.nasa.gov/sun/solar-storms-and-flares/" },
+          { term: "Geomagnetic Storm", definition: "A major disturbance of Earth's magnetosphere caused by energy transfer from solar wind/CMEs, rated from G1 (Minor) to G5 (Extreme).", link: "https://www.swpc.noaa.gov/noaa-scales-explanation" },
+          { term: "Active Regions and Sunspots", definition: "Along magnetic fields in the photosphere, certain areas heat up, and solar plages become visible; these are called active regions. Within these regions, sunspots are areas that are often a few hundred or thousand degrees cooler and darker.", link: "https://www.weather.gov/fsd/sunspots" },
+          { term: "Hungarian Astronomical Association", definition: "The Hungarian Astronomical Association (MCSE) is the largest and oldest group of amateur astronomers in Hungary.", link: "https://mcse.hu" },
+          { term: "MCSE Solar Section", definition: "The Solar Section of the Hungarian Astronomical Association (MCSE) is a group of amateur astronomers dedicated to Solar observation.", link: "https://nap.mcse.hu" },
+          { term: "Hungarian Solar Physics Foundation (MNA)", definition: "To create an environment for Hungarian ground-based observations for solar and heliophysical scientific research and education. To carry out solar and heliophysical observations and to process.", link: "http://hspf.eu" }
+
+        ];
+
+        const GLOSSARY_HU = [
+          { term: "CME (Koronakidobódás)", definition: "A Nap koronájából a bolygóközi térbe kilőtt plazmafelhő és mágneses mező, amely sarki fényt és geomágneses vihart okozhat, ha eléri a Földet.", link: "https://www.swpc.noaa.gov/phenomena/coronal-mass-ejections" },
+          { term: "Flerek", definition: "Ellentétes polaritású mágneses erővonalak két végénél a szomszédos mágneses tér átkötődik, melynek során jelentős mennyiségű energia szabadulhat fel.", link: "https://science.nasa.gov/sun/solar-storms-and-flares/" },
+          { term: "Geomágneses vihar", definition: "A Föld mágneses pajzsának átmeneti perturbációja, amelyet a Napból kilökődött nagysebességű plazma okoz. G1 és G5 közötti fokozatú.", link: "https://www.swpc.noaa.gov/noaa-scales-explanation" },
+          { term: "Aktív Régiók és napfoltok", definition: "A mágneses mezők mentén  a fotoszférában egyes területek felmelegednek, napfáklyák válnak láthatóvá, melyeket aktív régióknak nevezünk. Ezeken belül sokszor pár száz vagy ezer fokkal hűvösebb, sötétebb területek a napfoltok.", link: "https://www.weather.gov/fsd/sunspots" },
+          { term: "Magyar Csillagászati Egyesület", definition: "A Magyar Csillagászati Egyesület (MCSE) Magyarország legnagyobb amatőrcsillagász egyesülete, célja a csillagászat megismertetése és megszerettetése.", link: "https://mcse.hu" },
+          { term: "MCSE Nap szakcsoport", definition: "A Magyar Csillagászati Egyesület Nap szakcsoportja a Napészlelés iránt érdeklődő amatőrcsillagászokat fog össze.", link: "https://nap.mcse.hu" },
+          { term: "Magyar Napfizikai Alapítvány (MNA)", definition: "A magyar nap- és heliofizikai tudományos és oktatói földi típusú észlelések körülményeinek megteremtése, nap- és heliofizikai észlelések lebonyolítása és az így nyert adatok feldolgozása.", link: "http://hspf.eu" }
+        ];
+
+        async function computeSolarParameters(dateStr) {
+            let resultData;
+            let attempt = 0;
+            let url;
+            const maxAttempts = 3;
+
+            console.debug("compute start");
+
+            try {
+                console.debug("attempt to call api");
+                let response;
+
+                // Újrapróbálkozási logika
+                while (attempt < maxAttempts) {
+                    try {
+                        attempt++;
+                        // Feltételezzük, hogy az endDate, timeStr, lat, lon változók elérhetőek a külső scope-ból
+                        //url = `http://localhost:8000/api/ephemeris?date=${dateStr}`;
+                        //url = 'http://localhost:8000/api/ephemeris?date=2026-06-30&time=13:02:00&lat=47.4983&lon=20.0408';
+                        url = `https://sun-ephem.vercel.app/api/ephemeris?date=${dateStr}`;
+                        console.debug(url);
+                        response = await fetch(url);
+
+                        if (response.ok) break;
+
+                        if (attempt < maxAttempts) {
+                            await new Promise(resolve => setTimeout(resolve, attempt * 1000));
+                        }
+                    } catch (err) {
+                        if (attempt >= maxAttempts) throw err;
+                        await new Promise(resolve => setTimeout(resolve, attempt * 1000));
+                    }
+                }
+                console.debug("api call attempted");
+                // Ha sikeres volt az API hívás, feldolgozzuk
+                if (response && response.ok) {
+                    console.debug("api call responded");
+                    const data = await response.json();
+                    
+                    if (data) {
+                        // EGYSÉGESÍTÉS: Kivesszük a formázott értékeket, de tiszta P, B0, L0 neveket adunk nekik
+                        console.debug("api respond ephemeris");
+                        resultData = {
+                            P: data.efemeriszek.P,
+                            B0: data.efemeriszek.B0,
+                            L0: data.efemeriszek.L0,
+                            CR: data.efemeriszek.CR
+                        };
+                    } else {
+                        console.debug("api did not returne ephemeris");                        
+                    }
+                    
+                } else {
+                    console.debug("Repsones error");
+                    console.debug(response);
+                }
+            } catch (err) {
+                console.warn("API hiba történt, átváltás matematikai számításra...", err);
+                // opcionálisan itt lehetne setError
+            }
+
+            if (!resultData) {
+                console.debug("No ephem from api -> running fallback math");
+                const d = new Date(dateStr);
+                const dayOfYear = Math.floor((d - new Date(d.getFullYear(), 0, 0)) / (1000 * 60 * 60 * 24));
+                const P = 26.3 * Math.sin((2 * Math.PI * (dayOfYear - 105)) / 365.25);
+                const B0 = 7.25 * Math.sin((2 * Math.PI * (dayOfYear - 250)) / 365.25);
+                const baseEpochMs = new Date('2026-01-01T00:00:00Z').getTime();
+                const diffMs = d.getTime() - baseEpochMs;
+                const days = diffMs / (1000 * 60 * 60 * 24);
+                const rotationPeriodDays = 27.2753;
+                const L0 = (360 - ((days % rotationPeriodDays) / rotationPeriodDays) * 360) % 360;
+
+                resultData = {
+                    P: `${P.toFixed(2)}°`,  // Fokjellel látjuk el, hogy egyezzen az API formátumával
+                    B0: `${B0.toFixed(2)}°`,
+                    L0: `${L0.toFixed(1)}°`,
+                    CR: "0"
+                };
+                console.debug("Fallback kész:", resultData);
+            }
+
+            console.debug("use ephemeris", resultData);
+            return resultData;
+        }
+
+        function App() {
+            useEffect(() => {
+                console.debug("aap start");
+            }, []);
+          const [lang, setLang] = useState('hu'); 
+//          const [startDate, setStartDate] = useState('2026-06-30');
+//          const [endDate, setEndDate] = useState('2026-07-01');
+
+            // 1. Lekérjük a mai napot YYYY-MM-DD formátumban
+            const today = new Date();
+            const todayStr = today.toISOString().split('T')[0];
+
+            // 2. Kiszámoljuk a mai nap - 5 napot
+            const pastDate = new Date();
+            pastDate.setDate(today.getDate() - MAXDATERANGE);
+            const pastDateStr = pastDate.toISOString().split('T')[0];
+
+            // 3. Beállítjuk a state-ek alapértelmezett értékeit
+            const [startDate, setStartDate] = useState(pastDateStr);
+            const [endDate, setEndDate] = useState(todayStr);
+            
+          const [loading, setLoading] = useState(false);
+          const [error, setError] = useState(null);
+          
+          const [cmeList, setCmeList] = useState(DATA_EN);
+          const [selectedCme, setSelectedCme] = useState(DATA_EN[1]); // Default to X1.1 Halo event
+          
+          const [activeTab, setActiveTab] = useState('visualizer');
+          const [simulationSpeed, setSimulationSpeed] = useState(1);
+          const [simTime, setSimTime] = useState(0);
+          const [isSimPlaying, setIsSimPlaying] = useState(true);
+          const [hoveredCmeDisk, setHoveredCmeDisk] = useState(null);
+          const [mousePos, setMousePos] = useState({ x: 0, y: 0 });
+
+          const [mapAllCmes, setMapAllCmes] = useState(false); 
+          const [fullscreenElement, setFullscreenElement] = useState(null); 
+
+          const [showConfirmModal, setShowConfirmModal] = useState(false);
+          
+          // State to track API remaining limits dynamically
+          const [apiRemaining, setApiRemaining] = useState(null);
+          const [apiLimit, setApiLimit] = useState(null);
+
+          const [endParams, setSolarData] = useState(null);
+          //const [dateStr, setDateStr] = useState(endDate);
+          const [refreshTrigger, setRefreshTrigger] = useState(0);
+          
+          useEffect(() => {
+              const loadParameters = async () => {
+                console.debug("DateStr", endDate);
+                  const ephemData = await computeSolarParameters(endDate);
+                  setSolarData(ephemData); // Elmentjük a state-be
+              };
+                
+              loadParameters();
+          }, [refreshTrigger]); // vagy amilyen változótól függ
+
+
+          useEffect(() => {
+            const backupData = lang === 'hu' ? DATA_HU : DATA_EN;
+            setCmeList(prev => {
+              return prev.map(item => {
+                const found = backupData.find(b => b.activityID === item.activityID);
+                return found ? found : item;
+              });
+            });
+            setSelectedCme(prev => {
+              if (!prev) return null;
+              const found = backupData.find(b => b.activityID === prev.activityID);
+              return found ? found : prev;
+            });
+          }, [lang]);
+
+          const orbitCanvasRef = useRef(null);
+          const sunDiskCanvasRef = useRef(null);
+          const fullscreenSunDiskCanvasRef = useRef(null);
+          const fullscreenOrbitCanvasRef = useRef(null);
+
+          useEffect(() => {
+            let animationFrameId;
+            if (isSimPlaying) {
+              const update = () => {
+                setSimTime((prev) => (prev + 0.3 * simulationSpeed) % 100);
+                animationFrameId = requestAnimationFrame(update);
+              };
+              animationFrameId = requestAnimationFrame(update);
+            }
+            return () => cancelAnimationFrame(animationFrameId);
+          }, [isSimPlaying, simulationSpeed]);
+
+          useEffect(() => {
+            const handleKeyDown = (e) => {
+              if (e.key === 'Escape') {
+                setFullscreenElement(null);
+              }
+            };
+            window.addEventListener('keydown', handleKeyDown);
+            return () => window.removeEventListener('keydown', handleKeyDown);
+          }, []);
+
+          // nem engedjük a mai napnál tovább tolni
+          const adjustEndDate = (start) => {
+            const d = new Date(start);
+            d.setDate(d.getDate() + MAXDATERANGE);
+            
+            const today = new Date();
+            // Ha a MAXDATERANGE túllépne a mai napon, akkor a mai napot adjuk vissza korlátként
+            if (d > today) {
+              return today.toISOString().split('T')[0];
+            }
+            return d.toISOString().split('T')[0];
+          };
+
+          const handleStartDateChange = (e) => {
+            const val = e.target.value;
+            setStartDate(val);
+            setEndDate(adjustEndDate(val));
+          };
+
+          // Leave Start Date untouched, de megakadályozzuk, hogy a záró dátum korábbi legyen, mint a kezdő
+          const handleEndDateChange = (e) => {
+            const selectedEndDate = e.target.value;
+            
+            if (new Date(selectedEndDate) < new Date(startDate)) {
+              // Ha korábbi dátumot választott, automatikusan a kezdő dátumra korlátozzuk
+              setEndDate(startDate);
+            } else {
+              setEndDate(selectedEndDate);
+            }
+          };
+
+          const renderOrbitCanvas = (canvas) => {
+            if (!canvas) return;
+            const ctx = canvas.getContext('2d');
+            const width = canvas.width;
+            const height = canvas.height;
+
+            ctx.fillStyle = '#060a13';
+            ctx.fillRect(0, 0, width, height);
+
+            ctx.fillStyle = 'rgba(255, 255, 255, 0.35)';
+            for (let i = 0; i < 40; i++) {
+              const x = (Math.sin(i * 99) * 0.5 + 0.5) * width;
+              const y = (Math.cos(i * 144) * 0.5 + 0.5) * height;
+              ctx.fillRect(x, y, 1.2, 1.2);
+            }
+
+            const centerX = width / 2;
+            const centerY = height / 2;
+            const sunRadius = width * 0.06;
+
+            ctx.strokeStyle = 'rgba(255, 255, 255, 0.08)';
+            ctx.lineWidth = 1;
+            const earthOrbitRadius = width * 0.38;
+            ctx.beginPath();
+            ctx.arc(centerX, centerY, earthOrbitRadius, 0, Math.PI * 2);
+            ctx.stroke();
+
+            const innerOrbitRadius = width * 0.18;
+            const outerOrbitRadius = width * 0.31;
+            ctx.beginPath();
+            ctx.arc(centerX, centerY, innerOrbitRadius, 0, Math.PI * 2);
+            ctx.arc(centerX, centerY, outerOrbitRadius, 0, Math.PI * 2);
+            ctx.stroke();
+
+            const sunGradient = ctx.createRadialGradient(centerX, centerY, 3, centerX, centerY, sunRadius);
+            sunGradient.addColorStop(0, '#fffdf0');
+            sunGradient.addColorStop(0.3, '#eab308');
+            sunGradient.addColorStop(1, 'rgba(239, 68, 68, 0)');
+            ctx.fillStyle = sunGradient;
+            ctx.beginPath();
+            ctx.arc(centerX, centerY, sunRadius * 1.8, 0, Math.PI * 2);
+            ctx.fill();
+
+            ctx.fillStyle = '#f59e0b';
+            ctx.beginPath();
+            ctx.arc(centerX, centerY, sunRadius * 0.6, 0, Math.PI * 2);
+            ctx.fill();
+
+            if (selectedCme) {
+              const analysis = selectedCme.cmeAnalyses?.[0] || {};
+              const angleDeg = analysis.longitude !== undefined ? analysis.longitude : 0; 
+              const halfAngleDeg = analysis.halfAngle !== undefined ? analysis.halfAngle : 45;
+              const speed = analysis.speed || 500;
+              
+              const centerAngleRad = (angleDeg * Math.PI) / 180;
+              const spreadRad = (halfAngleDeg * Math.PI) / 180;
+              const currentRadius = (simTime / 100) * (earthOrbitRadius + 25);
+
+              if (currentRadius > sunRadius) {
+                ctx.beginPath();
+                const startRad = centerAngleRad - spreadRad;
+                const endRad = centerAngleRad + spreadRad;
+                ctx.arc(centerX, centerY, currentRadius, startRad, endRad);
+                ctx.lineTo(centerX, centerY);
+                ctx.closePath();
+
+                const cmeGradient = ctx.createRadialGradient(centerX, centerY, sunRadius, centerX, centerY, currentRadius);
+                if (speed >= 1000) {
+                  cmeGradient.addColorStop(0, 'rgba(239, 68, 68, 0.04)');
+                  cmeGradient.addColorStop(0.8, 'rgba(239, 68, 68, 0.38)');
+                  cmeGradient.addColorStop(1, 'rgba(255, 255, 255, 0.75)');
+                  ctx.strokeStyle = 'rgba(255, 255, 255, 0.65)';
+                } else {
+                  cmeGradient.addColorStop(0, 'rgba(245, 158, 11, 0.04)');
+                  cmeGradient.addColorStop(0.8, 'rgba(245, 158, 11, 0.28)');
+                  cmeGradient.addColorStop(1, 'rgba(239, 68, 68, 0.55)');
+                  ctx.strokeStyle = 'rgba(239, 68, 68, 0.45)';
+                }
+                
+                ctx.fillStyle = cmeGradient;
+                ctx.fill();
+                ctx.lineWidth = 1;
+                ctx.stroke();
+              }
+            }
+
+            const earthX = centerX + earthOrbitRadius;
+            const earthY = centerY;
+            ctx.fillStyle = '#3b82f6';
+            ctx.beginPath();
+            ctx.arc(earthX, earthY, 6, 0, Math.PI * 2);
+            ctx.fill();
+            ctx.strokeStyle = 'rgba(59, 130, 246, 0.4)';
+            ctx.lineWidth = 2.5;
+            ctx.beginPath();
+            ctx.arc(earthX, earthY, 9, 0, Math.PI * 2);
+            ctx.stroke();
+
+            ctx.fillStyle = '#cbd5e1';
+            ctx.font = 'bold 10px sans-serif';
+            ctx.fillText(lang === 'hu' ? 'Föld' : 'Earth', earthX + 12, earthY + 3);
+
+            const pspX = centerX + Math.cos(Math.PI / 4) * innerOrbitRadius;
+            const pspY = centerY + Math.sin(Math.PI / 4) * innerOrbitRadius;
+            ctx.fillStyle = '#ec4899';
+            ctx.beginPath();
+            ctx.arc(pspX, pspY, 3.5, 0, Math.PI * 2);
+            ctx.fill();
+            ctx.fillText('PSP', pspX + 6, pspY - 4);
+
+            const juiceX = centerX + Math.cos(Math.PI * 1.6) * outerOrbitRadius;
+            const juiceY = centerY + Math.sin(Math.PI * 1.6) * outerOrbitRadius;
+            ctx.fillStyle = '#a855f7';
+            ctx.beginPath();
+            ctx.arc(juiceX, juiceY, 3.5, 0, Math.PI * 2);
+            ctx.fill();
+            ctx.fillText('Juice', juiceX + 6, juiceY + 3);
+
+            const clipperX = centerX + Math.cos(Math.PI * 1.8) * outerOrbitRadius;
+            const clipperY = centerY + Math.sin(Math.PI * 1.8) * outerOrbitRadius;
+            ctx.fillStyle = '#14b8a6';
+            ctx.beginPath();
+            ctx.arc(clipperX, clipperY, 3.5, 0, Math.PI * 2);
+            ctx.fill();
+            ctx.fillText('Clipper', clipperX + 6, clipperY - 4);
+          };
+
+          useEffect(() => {
+            if (fullscreenElement === 'orbit') {
+              renderOrbitCanvas(fullscreenOrbitCanvasRef.current);
+            } else {
+              renderOrbitCanvas(orbitCanvasRef.current);
+            }
+          }, [simTime, selectedCme, lang, fullscreenElement]);
+
+          const projectCoordinatesToEndDate = (cme, targetDateStr) => {
+            const analysis = cme.cmeAnalyses?.[0];
+            if (!analysis) return { latitude: 0, longitude: 0, originalLat: 0, originalLon: 0, dtDays: 0 };
+
+            const originalLat = analysis.latitude !== undefined ? analysis.latitude : 0;
+            const originalLon = analysis.longitude !== undefined ? analysis.longitude : 0;
+
+            const startMs = new Date(cme.startTime).getTime();
+            const targetMs = new Date(targetDateStr).getTime();
+            const dtMs = targetMs - startMs;
+            const dtDays = dtMs / (1000 * 60 * 60 * 24);
+
+            const rotationRatePerDay = 13.2; 
+            let projectedLon = originalLon + (rotationRatePerDay * dtDays);
+
+            while (projectedLon > 180) projectedLon -= 360;
+            while (projectedLon < -180) projectedLon += 360;
+
+            return {
+              latitude: originalLat, 
+              longitude: parseFloat(projectedLon.toFixed(1)),
+              originalLat,
+              originalLon,
+              dtDays: parseFloat(dtDays.toFixed(2))
+            };
+          };
+
+          const renderSunDiskCanvas = (canvas) => {
+            if (!canvas) return;
+            const ctx = canvas.getContext('2d');
+            const width = canvas.width;
+            const height = canvas.height;
+
+            ctx.fillStyle = '#060a13';
+            ctx.fillRect(0, 0, width, height);
+
+            const centerX = width / 2;
+            const centerY = height / 2;
+            const sunRadius = width * 0.34;
+
+            const backGlow = ctx.createRadialGradient(centerX, centerY, sunRadius * 0.9, centerX, centerY, sunRadius * 1.35);
+            backGlow.addColorStop(0, 'rgba(245, 158, 11, 0.22)');
+            backGlow.addColorStop(1, 'rgba(239, 68, 68, 0)');
+            ctx.fillStyle = backGlow;
+            ctx.beginPath();
+            ctx.arc(centerX, centerY, sunRadius * 1.35, 0, Math.PI * 2);
+            ctx.fill();
+
+            const sunBase = ctx.createRadialGradient(centerX, centerY, 0, centerX, centerY, sunRadius);
+            sunBase.addColorStop(0, '#fef08a');
+            sunBase.addColorStop(0.72, '#f59e0b');
+            sunBase.addColorStop(1, '#b45309');
+            ctx.fillStyle = sunBase;
+            ctx.beginPath();
+            ctx.arc(centerX, centerY, sunRadius, 0, Math.PI * 2);
+            ctx.fill();
+
+            const tiltAngleDeg = endParams?.P;
+            const tiltRad = (tiltAngleDeg * Math.PI) / 180;
+
+            ctx.save();
+            ctx.translate(centerX, centerY);
+            ctx.rotate(tiltRad);
+
+            ctx.strokeStyle = 'rgba(0, 0, 0, 0.12)';
+            ctx.lineWidth = 1;
+
+            for (let lat = -80; lat <= 80; lat += 10) {
+              if (lat === 0) continue;
+              const latRad = (lat * Math.PI) / 180;
+              const y = Math.sin(latRad) * sunRadius;
+              const r = Math.cos(latRad) * sunRadius;
+
+              ctx.beginPath();
+              ctx.ellipse(0, y, r, r * 0.15, 0, 0, Math.PI * 2);
+              ctx.stroke();
+            }
+
+            for (let lon = -80; lon <= 80; lon += 10) {
+              if (lon === 0) continue;
+              const lonRad = (lon * Math.PI) / 180;
+              const rX = Math.sin(lonRad) * sunRadius;
+
+              ctx.beginPath();
+              ctx.ellipse(0, 0, Math.abs(rX), sunRadius, 0, 0, Math.PI * 2);
+              ctx.stroke();
+            }
+
+            ctx.strokeStyle = 'rgba(0, 0, 0, 0.35)';
+            ctx.lineWidth = 1.6;
+            ctx.beginPath();
+            ctx.ellipse(0, 0, sunRadius, sunRadius * 0.15, 0, 0, Math.PI * 2);
+            ctx.stroke();
+
+            ctx.beginPath();
+            ctx.moveTo(0, -sunRadius);
+            ctx.lineTo(0, sunRadius);
+            ctx.stroke();
+
+            ctx.strokeStyle = '#ef4444';
+            ctx.lineWidth = 2.2;
+            ctx.beginPath();
+            ctx.moveTo(0, -sunRadius - 15);
+            ctx.lineTo(0, sunRadius + 15);
+            ctx.stroke();
+
+            ctx.fillStyle = '#ef4444';
+            ctx.font = 'bold 12px monospace';
+            ctx.textAlign = 'center';
+            ctx.fillText('P', 0, -sunRadius - 22);
+
+            ctx.restore();
+
+            ctx.fillStyle = '#94a3b8';
+            ctx.font = 'bold 13px sans-serif';
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'middle';
+            ctx.fillText('N', centerX, centerY - sunRadius - 18);
+            ctx.fillText('E', centerX - sunRadius - 18, centerY);
+
+            ctx.fillStyle = '#22c55e'; 
+            ctx.strokeStyle = 'rgba(34, 197, 94, 0.4)';
+            ctx.lineWidth = 3;
+            ctx.beginPath();
+            ctx.arc(centerX, centerY, 5, 0, Math.PI * 2);
+            ctx.fill();
+            ctx.stroke();
+
+            const getCanvasCoords = (lat, lon) => {
+              const latRad = (lat * Math.PI) / 180;
+              const lonRad = (lon * Math.PI) / 180;
+
+              let x3d = sunRadius * Math.cos(latRad) * Math.sin(lonRad);
+              let y3d = -sunRadius * Math.sin(latRad);
+              let z3d = sunRadius * Math.cos(latRad) * Math.cos(lonRad);
+
+              const isFront = z3d >= 0;
+              const xRot = x3d * Math.cos(-tiltRad) - y3d * Math.sin(-tiltRad);
+              const yRot = x3d * Math.sin(-tiltRad) + y3d * Math.cos(-tiltRad);
+
+              return { x: centerX + xRot, y: centerY + yRot, isFront };
+            };
+
+            const itemsToRender = mapAllCmes ? cmeList : (selectedCme ? [selectedCme] : []);
+
+            itemsToRender.forEach((cme) => {
+              const projection = projectCoordinatesToEndDate(cme, endDate);
+              const pos = getCanvasCoords(projection.latitude, projection.longitude);
+              const isSelected = selectedCme?.activityID === cme.activityID;
+
+              if (pos.isFront && Math.abs(projection.longitude) <= 90) {
+                ctx.strokeStyle = '#f87171';
+                ctx.lineWidth = isSelected ? 2.5 : 1.5;
+                
+                ctx.beginPath();
+                ctx.arc(pos.x, pos.y, isSelected ? 9 : 6, 0, Math.PI * 2);
+                ctx.stroke();
+
+                ctx.beginPath();
+                ctx.moveTo(pos.x - (isSelected ? 15 : 10), pos.y);
+                ctx.lineTo(pos.x + (isSelected ? 15 : 10), pos.y);
+                ctx.moveTo(pos.x, pos.y - (isSelected ? 15 : 10));
+                ctx.lineTo(pos.x, pos.y + (isSelected ? 15 : 10));
+                ctx.stroke();
+
+                ctx.fillStyle = isSelected ? '#ffffff' : '#ef4444';
+                ctx.beginPath();
+                ctx.arc(pos.x, pos.y, isSelected ? 3.5 : 2.5, 0, Math.PI * 2);
+                ctx.fill();
+
+                ctx.fillStyle = '#ffffff';
+                ctx.font = 'bold 9px monospace';
+                ctx.fillText(cme.sourceLocation || 'AR', pos.x, pos.y - (isSelected ? 18 : 13));
+              }
+            });
+          };
+
+          useEffect(() => {
+            if (fullscreenElement === 'disk') {
+              renderSunDiskCanvas(fullscreenSunDiskCanvasRef.current);
+            } else {
+              renderSunDiskCanvas(sunDiskCanvasRef.current);
+            }
+          }, [cmeList, selectedCme, mapAllCmes, endDate, fullscreenElement, endParams]);
+
+          const handleMouseMoveSunDisk = (e) => {
+            const canvas = e.currentTarget;
+            const rect = canvas.getBoundingClientRect();
+            
+            const relativeX = e.clientX - rect.left;
+            const relativeY = e.clientY - rect.top;
+            const x = relativeX * (canvas.width / rect.width);
+            const y = relativeY * (canvas.height / rect.height);
+
+            setMousePos({ x: e.clientX, y: e.clientY });
+
+            const centerX = canvas.width / 2;
+            const centerY = canvas.height / 2;
+            const sunRadius = canvas.width * 0.34;
+            const tiltRad = (endParams?.P * Math.PI) / 180;
+
+            const getCanvasCoords = (lat, lon) => {
+              const latRad = (lat * Math.PI) / 180;
+              const lonRad = (lon * Math.PI) / 180;
+              let x3d = sunRadius * Math.cos(latRad) * Math.sin(lonRad);
+              let y3d = -sunRadius * Math.sin(latRad);
+              const xRot = x3d * Math.cos(-tiltRad) - y3d * Math.sin(-tiltRad);
+              const yRot = x3d * Math.sin(-tiltRad) + y3d * Math.cos(-tiltRad);
+              return { x: centerX + xRot, y: centerY + yRot };
+            };
+
+            let found = null;
+            const itemsToCheck = mapAllCmes ? cmeList : (selectedCme ? [selectedCme] : []);
+            
+            itemsToCheck.forEach((cme) => {
+              const projection = projectCoordinatesToEndDate(cme, endDate);
+              const pos = getCanvasCoords(projection.latitude, projection.longitude);
+
+              const dist = Math.hypot(x - pos.x, y - pos.y);
+              if (dist < 18) { 
+                found = cme;
+              }
+            });
+
+            setHoveredCmeDisk(found);
+          };
+
+          const handleMouseLeaveSunDisk = () => {
+            setHoveredCmeDisk(null);
+          };
+
+          const handleFetchTrigger = (e) => {
+            e.preventDefault();
+            const d1 = new Date(startDate);
+            const d2 = new Date(endDate);
+            const diffTime = Math.abs(d2 - d1);
+            const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+
+            if (diffDays > MAXDATERANGE) {
+              setShowConfirmModal(true);
+            } else {
+              executeFetch();
+            }            
+          };
+          
+          const executeFetch = async () => {
+            setShowConfirmModal(false);
+            setLoading(true);
+            setError(null);
+
+            // Pre-emptive rate limit check to prevent request if we know it's at zero
+            if (apiRemaining !== null && apiRemaining <= 0) {
+              setError(lang === 'hu' 
+                ? "Túl sok kérés, próbálja 1-2 óra múlva." 
+                : "Too many requests, please try again in 1-2 hours."
+              );
+              setLoading(false);
+              return;
+            }
+
+            try {
+              let response;
+              let url = `https://api.nasa.gov/DONKI/CME?startDate=${startDate}&endDate=${endDate}&api_key=${API_KEY}`
+              let attempt = 0;
+              const maxAttempts = 3;
+              
+              while (attempt < maxAttempts) {
+                try {
+                  //response = await fetch(`https://api.nasa.gov/DONKI/CME?startDate=${startDate}&endDate=${endDate}&api_key=${API_KEY}`);
+                  //const url = `https://kauai.ccmc.gsfc.nasa.gov/DONKI/WS/get/CME?startDate=${startDate}&endDate=${endDate}`
+                  
+                  console.debug(url)
+                  response = await fetch(url);
+                  //https://kauai.ccmc.gsfc.nasa.gov/DONKI/WS/get/CME?startDate=2017-01-03&endDate=2017-01-03
+                  //https://api.nasa.gov/DONKI/CME?startDate=2017-01-03&endDate=2017-01-03&api_key=Qk8ff4ZQHXTGO5VRdOhYIvOymed0bcD1pFHSYtl6
+                  
+                  // Extract NASA's Rate-Limit headers
+                  const limitHeader = response.headers.get('X-RateLimit-Limit');
+                  const remainingHeader = response.headers.get('X-RateLimit-Remaining');
+                  
+                  if (limitHeader) setApiLimit(parseInt(limitHeader, 10));
+                  if (remainingHeader) setApiRemaining(parseInt(remainingHeader, 10));
+                  console.info("ApiLimit", apiLimit);
+                  console.info("apiRemaining", apiRemaining);
+
+                  if (response.status === 429 || (remainingHeader && parseInt(remainingHeader, 10) <= 0)) {
+                    setApiRemaining(0);
+                    throw new Error("RATE_LIMIT_EXCEEDED");
+                  }
+
+                  if (response.ok) {
+                    break;
+                  } else {
+                    attempt++;
+                    url = `https://kauai.ccmc.gsfc.nasa.gov/DONKI/WS/get/CME?startDate=${startDate}&endDate=${endDate}`
+                    if (attempt >= maxAttempts) break;
+                    await new Promise(resolve => setTimeout(resolve, attempt * 1000));
+                  }
+                } catch (err) {
+                  //if (err.message === "RATE_LIMIT_EXCEEDED") throw err;
+                  if (err.message === "RATE_LIMIT_EXCEEDED") {
+                    url = `https://kauai.ccmc.gsfc.nasa.gov/DONKI/WS/get/CME?startDate=${startDate}&endDate=${endDate}`
+                    attempt=0;
+                  } 
+                  attempt++;
+                  if (attempt >= maxAttempts) throw err;
+                  await new Promise(resolve => setTimeout(resolve, attempt * 1000));
+                }
+              }
+
+              if (!response || !response.ok) {
+                throw new Error("API_FAIL");
+              }
+
+              const data = await response.json();
+              if (!data || data.length === 0) {
+                throw new Error("EMPTY_DATA");
+              }
+
+              setCmeList(data);
+              setSelectedCme(data[0]);
+            } catch (err) {
+              console.warn(err);
+              if (err.message === "RATE_LIMIT_EXCEEDED" || (apiRemaining !== null && apiRemaining <= 0)) {
+                setError(lang === 'hu' 
+                  ? "Túl sok kérés, próbálja 1-2 óra múlva." 
+                  : "Too many requests, please try again in 1-2 hours."
+                );
+              } else if (err.message === "EMPTY_DATA") {
+                setError(lang === 'hu' ? 'Nincs rögzített adat a megadott intervallumban.' : 'No recorded events during this period.');
+              } else {
+                setError(lang === 'hu' ? 'A NASA API lekérdezés meghiúsult. Offline mód aktív.' : 'NASA API call failed. Using offline simulation backup.');
+              }
+              
+              // Maintain consistent layout state with backups on error
+              const fallback = lang === 'hu' ? DATA_HU : DATA_EN;
+              setCmeList(fallback);
+              setSelectedCme(fallback[0]);
+            } finally {
+              setLoading(false);
+            }
+            setRefreshTrigger(prev => prev + 1);
+          };
+
+          // Automatikus lekérdezés az oldal betöltődésekor
+          useEffect(() => {
+            executeFetch();
+          }, []);
+          
+          return (
+            <div className="min-h-screen bg-slate-950 text-slate-100 flex flex-col font-sans selection:bg-amber-500 selection:text-slate-950">
+              
+              <header className="bg-slate-900/80 backdrop-blur-md border-b border-slate-800 px-6 py-4 flex flex-col sm:flex-row items-center justify-between gap-4">
+                <div className="flex items-center gap-3">
+                  <div className="p-2 bg-gradient-to-br from-amber-500 to-orange-600 rounded-lg shadow-lg shadow-amber-500/20">
+                    <svg className="w-6 h-6 text-slate-950" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M12 3v1m0 16v1m9-9h-1M4 12H3m15.364-6.364l-.707.707M6.343 17.657l-.707.707m0-11.314l.707.707m11.314 11.314l.707-.707M12 8a4 4 0 100 8 4 4 0 000-8z" />
+                    </svg>
+                  </div>
+                  <div>
+                    <h1 className="text-xl font-bold tracking-tight bg-gradient-to-r from-amber-400 to-orange-500 bg-clip-text text-transparent">
+                      CME Visualizer ({APPVERSION})
+                    </h1>
+                    <p className="text-xs text-slate-400 font-mono">
+                      {lang === 'hu' ? 'Korona anyag kidobódás (CME) szimulátor' : 'Coronal Mass Ejection (CME) simulator'}
+                    </p>
+                  </div>
+                </div>
+
+                <div className="flex items-center gap-5">
+                  <div className="flex items-center gap-1 bg-slate-950/60 p-1 rounded-lg border border-slate-800">
+                    <button 
+                      onClick={() => setLang('en')}
+                      className={`px-2.5 py-1 rounded text-xs font-bold transition duration-150 ${lang === 'en' ? 'bg-amber-500 text-slate-950' : 'text-slate-400 hover:text-slate-200'}`}
+                    >
+                      EN
+                    </button>
+                    <button 
+                      onClick={() => setLang('hu')}
+                      className={`px-2.5 py-1 rounded text-xs font-bold transition duration-150 ${lang === 'hu' ? 'bg-amber-500 text-slate-950' : 'text-slate-400 hover:text-slate-200'}`}
+                    >
+                      HU
+                    </button>
+                  </div>
+
+                  <div className="hidden md:flex gap-4 text-xs font-medium">
+                    <a href="https://nap.mcse.hu/" target="_blank" rel="noopener noreferrer" className="text-amber-400 hover:underline">MCSE Nap szakcsoport ↗</a>
+                    <a href="https://api.nasa.gov/" target="_blank" rel="noopener noreferrer" className="text-amber-400 hover:underline">NASA APIs ↗</a>
+                    <a href="https://kauai.ccmc.gsfc.nasa.gov/DONKI/" target="_blank" rel="noopener noreferrer" className="text-slate-400 hover:text-slate-200">CCMC DONKI ↗</a>
+                  </div>
+                </div>
+              </header>
+
+              <main className="flex-1 max-w-7xl w-full mx-auto p-4 md:p-6 grid grid-cols-1 lg:grid-cols-12 gap-6">
+                
+                <section className="lg:col-span-4 flex flex-col gap-6">
+                  
+                  <div className="bg-slate-900 border border-slate-800 rounded-xl p-5 shadow-xl relative">
+                    <div className="flex justify-between items-center mb-4">
+                      <h2 className="text-sm font-semibold text-slate-300 uppercase tracking-wider flex items-center gap-2">
+                        <svg className="w-4 h-4 text-amber-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 6V4m0 2a2 2 0 100 4m0-4a2 2 0 110 4m-6 8a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4m6 6v10m6-2a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4" /></svg>
+                        {lang === 'hu' ? 'Paraméterek' : 'Parameters'}
+                      </h2>
+                    </div>
+
+                    <form onSubmit={handleFetchTrigger} className="space-y-4 font-sans">
+                      <div>
+                        <label className="block text-xs font-medium text-slate-400 mb-1">{lang === 'hu' ? 'Kezdő Dátum' : 'Start Date'}</label>
+                        <input 
+                          type="date" 
+                          value={startDate} 
+                          onChange={handleStartDateChange}
+                          className="w-full bg-slate-950 border border-slate-800 rounded px-3 py-2 text-sm text-slate-200 focus:outline-none focus:border-amber-500"
+                        />
+                      </div>
+
+                      <div>
+                        <label className="block text-xs font-medium text-slate-400 mb-1">{lang === 'hu' ? 'Záró Dátum' : 'End Date'}</label>
+                        <input 
+                          type="date" 
+                          value={endDate} 
+                          onChange={handleEndDateChange}
+                          className="w-full bg-slate-950 border border-slate-800 rounded px-3 py-2 text-sm text-slate-200 focus:outline-none focus:border-amber-500"
+                        />
+                      </div>
+
+                      <button 
+                        type="submit" 
+                        disabled={loading}
+                        className="w-full mt-2 py-2 px-4 bg-gradient-to-r from-amber-500 to-orange-600 hover:from-amber-600 hover:to-orange-700 text-slate-950 font-bold rounded text-sm transition shadow-lg shadow-amber-500/10 hover:shadow-amber-500/20 flex items-center justify-center gap-2"
+                      >
+                        {loading ? (
+                          <>
+                            <svg className="animate-spin h-4 w-4 text-slate-950" fill="none" viewBox="0 0 24 24">
+                              <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                              <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+                            </svg>
+                            <span>{lang === 'hu' ? 'Betöltés...' : 'Loading...'}</span>
+                          </>
+                        ) : (
+                          <span>{lang === 'hu' ? 'Betöltés' : 'Load'}</span>
+                        )}
+                      </button>
+                    </form>
+
+                    {error && (
+                      <div className="mt-4 p-3 bg-red-950/40 border border-red-500/30 rounded text-xs text-red-300">
+                        <span className="font-bold">{lang === 'hu' ? 'Hiba' : 'Notice'}:</span> {error}
+                      </div>
+                    )}
+
+                    {/* Small API quota monitoring panel */}
+                    {apiRemaining !== null && (
+                      <div className="mt-4 pt-3 border-t border-slate-800 text-[10px] text-slate-400 flex justify-between font-mono">
+                        <span>API Quota Remaining:</span>
+                        <span className={apiRemaining === 0 ? "text-red-500 font-bold" : "text-amber-500 font-bold"}>
+                          {apiRemaining} / {apiLimit || 1000}
+                        </span>
+                      </div>
+                    )}
+                  </div>
+
+                  <div className="bg-slate-900 border border-slate-800 rounded-xl p-5 shadow-xl flex-1 flex flex-col min-h-[250px]">
+                    <h2 className="text-sm font-semibold text-slate-300 uppercase tracking-wider mb-4 flex items-center gap-2">
+                      <svg className="w-4 h-4 text-orange-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" /></svg>
+                      {lang === 'hu' ? `CME Események (${cmeList.length}) - Válassz` : `CME Events (${cmeList.length}) - Select`}
+                    </h2>
+
+                    <div className="space-y-3 overflow-y-auto flex-1 pr-1 max-h-[350px] lg:max-h-none font-sans custom-scrollbar">
+                      {cmeList.map((cme) => {
+                        const isSelected = selectedCme?.activityID === cme.activityID;
+                        const analysis = cme.cmeAnalyses?.[0] || {};
+                        const isSuperfast = analysis.speed >= 1000;
+                        const classType = analysis.associatedFeatures?.[0]?.classType || (lang === 'hu' ? "Nincs adat" : "N/A");
+                        
+                        return (
+                          <div
+                            key={cme.activityID}
+                            onClick={() => {
+                              setSelectedCme(cme);
+                              setSimTime(0);
+                            }}
+                            className={`cursor-pointer p-3 rounded-lg border transition duration-150 ${
+                              isSelected 
+                                ? 'bg-gradient-to-r from-slate-800 to-slate-900 border-amber-500/60 shadow-lg' 
+                                : 'bg-slate-950/50 border-slate-800/80 hover:border-slate-700 hover:bg-slate-900/60'
+                            }`}
+                          >
+                            <div className="flex justify-between items-start mb-1">
+                              <span className="text-[11px] font-mono text-slate-400">{cme.activityID}</span>
+                              <span className={`text-[10px] px-1.5 py-0.5 font-bold rounded ${
+                                isSuperfast ? 'bg-red-500/20 text-red-300 border border-red-500/30' : 'bg-amber-500/20 text-amber-300'
+                              }`}>
+                                {analysis.speed ? `${analysis.speed} km/s` : 'Speed N/A'}
+                              </span>
+                            </div>
+
+                            <div className="text-xs font-semibold text-slate-200 mt-1 flex items-center justify-between">
+                              <span>{lang === 'hu' ? 'Forrás' : 'Source'}: {cme.sourceLocation || 'Unknown'} ({classType})</span>
+                              <span className="text-slate-400 text-[10px] font-normal">{cme.startTime.split('T')[1]}</span>
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                </section>
+
+                <section className="lg:col-span-8 flex flex-col gap-6">
+                  
+                  <div className="bg-slate-900 border border-slate-800 rounded-xl p-2 flex gap-2">
+                    <button
+                      onClick={() => setActiveTab('visualizer')}
+                      className={`flex-1 py-2 px-3 text-sm font-semibold rounded-lg transition duration-200 ${
+                        activeTab === 'visualizer' ? 'bg-slate-800 text-amber-400 border border-slate-700' : 'text-slate-400 hover:text-slate-200'
+                      }`}
+                    >
+                      {lang === 'hu' ? 'Szimulációk' : 'Simulations'}
+                    </button>
+                    <button
+                      onClick={() => setActiveTab('raw_json')}
+                      className={`flex-1 py-2 px-3 text-sm font-semibold rounded-lg transition duration-200 ${
+                        activeTab === 'raw_json' ? 'bg-slate-800 text-amber-400 border border-slate-700' : 'text-slate-400 hover:text-slate-200'
+                      }`}
+                    >
+                      {lang === 'hu' ? 'Adatok' : 'Data'}
+                    </button>
+                    <button
+                      onClick={() => setActiveTab('glossary')}
+                      className={`flex-1 py-2 px-3 text-sm font-semibold rounded-lg transition duration-200 ${
+                        activeTab === 'glossary' ? 'bg-slate-800 text-amber-400 border border-slate-700' : 'text-slate-400 hover:text-slate-200'
+                      }`}
+                    >
+                      {lang === 'hu' ? 'Tudástár' : 'Definitions & Glossary'}
+                    </button>
+                  </div>
+
+                  {activeTab === 'visualizer' && (
+                    <div className="flex flex-col gap-6">
+                      
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                        
+                        <div className="bg-slate-900 border border-slate-800 rounded-xl p-5 shadow-xl flex flex-col items-center relative justify-between">
+                          <div className="w-full flex justify-between items-center mb-4">
+                            <h3 className="text-xs font-bold uppercase tracking-wider text-slate-400">
+                              {lang === 'hu' ? 'Napkorong & koordináták' : 'Solar disk & coordinates'}
+                            </h3>
+                                <div className="flex items-center gap-2">
+                                  {/* 1. Összes / Kijelölt gomb tooltippel */}
+                                  <div className="relative group">
+                                    <div className="absolute bottom-full right-0 mb-2 hidden group-hover:block bg-slate-800 text-slate-200 text-[11px] py-1 px-2 rounded shadow-xl border border-slate-700 whitespace-nowrap z-50 pointer-events-none">
+                                      {lang === 'hu' ? 'Váltás az összes vagy csak a kijelölt CME megjelenítése között' : 'Toggle between all or only the selected CME profile'}
+                                      <div className="absolute top-full right-3 border-4 border-transparent border-t-slate-800"></div>
+                                    </div>
+                                    <button 
+                                      onClick={() => setMapAllCmes(!mapAllCmes)}
+                                      className={`text-[10px] px-2 py-0.5 rounded border transition ${
+                                        mapAllCmes ? 'bg-amber-500/20 text-amber-300 border-amber-500/30' : 'bg-slate-800 text-slate-400 border-slate-700'
+                                      }`}
+                                    >
+                                      {mapAllCmes ? (lang === 'hu' ? 'Összes' : 'Map All') : (lang === 'hu' ? 'Kijelölt' : 'Selected')}
+                                    </button>
+                                  </div>
+
+                                  {/* 2. Napkorong Fullscreen gomb tooltippel */}
+                                  <div className="relative group">
+                                    <div className="absolute bottom-full right-0 mb-2 hidden group-hover:block bg-slate-800 text-slate-200 text-[11px] py-1 px-2 rounded shadow-xl border border-slate-700 whitespace-nowrap z-50 pointer-events-none">
+                                      {lang === 'hu' ? 'Napkorong megnyitása teljes képernyőn' : 'Open Solar Disk in full screen'}
+                                      <div className="absolute top-full right-3 border-4 border-transparent border-t-slate-800"></div>
+                                    </div>
+                                    <button 
+                                      onClick={() => setFullscreenElement(fullscreenElement === 'disk' ? null : 'disk')}
+                                      className="text-slate-400 hover:text-slate-200 p-1.5 rounded bg-slate-800 hover:bg-slate-700 flex"
+                                    >
+                                      <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M4 8V4m0 0h4M4 4l5 5m11-5h-4m4 0v4m0-4l-5 5M4 20v-4m0 4h4m-4 0l5-5m11 5h-4m4 0v-4m0 4l-5-5" /></svg>
+                                    </button>
+                                  </div>
+                                </div>
+
+                          </div>
+
+                          <div className="relative border border-slate-800/80 rounded-lg overflow-hidden bg-slate-950 w-full flex justify-center">
+                            <canvas 
+                              ref={sunDiskCanvasRef} 
+                              width={320} 
+                              height={320} 
+                              onMouseMove={handleMouseMoveSunDisk}
+                              onMouseLeave={handleMouseLeaveSunDisk}
+                              className="max-w-full aspect-square cursor-crosshair"
+                            />
+
+                            {hoveredCmeDisk && (
+                              <div 
+                                className="fixed z-[9999] bg-slate-950/95 border border-amber-500/80 p-3.5 rounded-lg shadow-2xl pointer-events-none max-w-xs transition-opacity duration-150 text-xs text-left"
+                                style={{
+                                  left: `${mousePos.x + 15}px`,
+                                  top: `${mousePos.y + 15}px`,
+                                }}
+                              >
+                                <p className="text-[10px] font-mono text-amber-400 font-bold mb-1.5 tracking-wider uppercase">
+                                  {lang === 'hu' ? 'FORRÁSKOORDINÁTÁK ÉS ROTÁCIÓ' : 'SOURCE PROFILE & SOLAR DRIFT'}
+                                </p>
+                                <h4 className="text-xs font-bold text-slate-100 mb-2 border-b border-slate-800 pb-1.5">
+                                  {hoveredCmeDisk.activityID}
+                                </h4>
+                                <div className="space-y-1.5 text-[11px] text-slate-300 font-sans">
+                                  <p><strong className="text-slate-400">{lang === 'hu' ? 'Napfolt' : 'AR Region'}:</strong> {hoveredCmeDisk.sourceLocation || 'N/A'}</p>
+                                  <p><strong className="text-slate-400">{lang === 'hu' ? 'Eruptív sebesség' : 'Blast Speed'}:</strong> {hoveredCmeDisk.cmeAnalyses?.[0]?.speed || 'n.a.'} km/s</p>
+                                  
+                                  <div className="mt-2 pt-2 border-t border-slate-800 space-y-1 text-slate-200">
+                                    <p className="text-[10px] text-amber-500 font-bold uppercase tracking-tight">
+                                      {lang === 'hu' ? '1. Koordináták a kitöréskor:' : '1. Original Eruption coords:'}
+                                    </p>
+                                    <p className="font-mono bg-slate-900/60 p-1 rounded border border-slate-800/50 font-sans font-semibold">
+                                      Lat: {projectCoordinatesToEndDate(hoveredCmeDisk, endDate).originalLat}°, Lon: {projectCoordinatesToEndDate(hoveredCmeDisk, endDate).originalLon}°
+                                    </p>
+                                    
+                                    <p className="text-[10px] text-green-400 font-bold uppercase tracking-tight mt-1.5">
+                                      {lang === 'hu' ? '2. Megjelenített dátumra:' : '2. Projected (At End Date):'}
+                                    </p>
+                                    <p className="font-mono bg-slate-900/60 p-1 rounded border border-slate-800/50 text-green-300 font-sans font-semibold">
+                                      Lat: {projectCoordinatesToEndDate(hoveredCmeDisk, endDate).latitude}°, Lon: {projectCoordinatesToEndDate(hoveredCmeDisk, endDate).longitude}°
+                                    </p>
+                                    <p className="text-[9px] text-slate-400 italic">
+                                      {lang === 'hu' 
+                                        ? `Eltérés: +${projectCoordinatesToEndDate(hoveredCmeDisk, endDate).dtDays} nap szoláris rotáció` 
+                                        : `Drift span: +${projectCoordinatesToEndDate(hoveredCmeDisk, endDate).dtDays} days solar rotation`}
+                                    </p>
+                                  </div>
+                                </div>
+                              </div>
+                            )}
+                          </div>
+                          
+                          <div className="w-full mt-3 bg-slate-950/80 p-3 rounded-lg border border-slate-800 text-[11px] text-slate-300 space-y-1 flex flex-col">
+                            <div className="flex justify-between items-center text-slate-400 font-semibold border-b border-slate-900 pb-1 mb-1">
+                              <span>{lang === 'hu' ? 'Efemerisz a záró dátumra:' : 'Ephemeris on End Date:'}</span>
+                              <span className="text-amber-500 font-mono">{endDate} | {lang === 'hu' ? 'Rotáció:' : 'Rotation:'} {endParams?.CR}</span>
+                            </div>
+                            <div className="grid grid-cols-3 text-center">
+                              <div>
+                                <span className="block text-slate-500 text-[10px]">B₀ (Tilt)</span>
+                                <span className="font-mono text-green-400 font-semibold">{endParams?.B0}°</span>
+                              </div>
+                              <div>
+                                <span className="block text-slate-500 text-[10px]">L₀ (Carrington)</span>
+                                <span className="font-mono text-green-400 font-semibold">{endParams?.L0}°</span>
+                              </div>
+                              <div>
+                                <span className="block text-slate-500 text-[10px]">P (Axis Angle)</span>
+                                <span className="font-mono text-green-400 font-semibold">{endParams?.P}°</span>
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+
+                        <div className="bg-slate-900 border border-slate-800 rounded-xl p-5 shadow-xl flex flex-col items-center justify-between">
+                          <div className="w-full flex justify-between items-center mb-4">
+                            <h3 className="text-xs font-bold uppercase tracking-wider text-slate-400">
+                              {lang === 'hu' ? 'CME terjedés' : 'CME Propagation'}
+                            </h3>
+                                <div className="flex items-center gap-2">
+                                  {/* 1. Play / Pause gomb tooltippel */}
+                                  <div className="relative group">
+                                    <div className="absolute bottom-full right-0 mb-2 hidden group-hover:block bg-slate-800 text-slate-200 text-[11px] py-1 px-2 rounded shadow-xl border border-slate-700 whitespace-nowrap z-50 pointer-events-none">
+                                      {isSimPlaying ? (lang === 'hu' ? 'Szimuláció megállítása' : 'Pause simulation') : (lang === 'hu' ? 'Szimuláció indítása' : 'Play simulation')}
+                                      <div className="absolute top-full right-3 border-4 border-transparent border-t-slate-800"></div>
+                                    </div>
+                                    <button 
+                                      onClick={() => setIsSimPlaying(!isSimPlaying)}
+                                      className="p-1 rounded bg-slate-800 hover:bg-slate-700 text-amber-400 flex"
+                                    >
+                                      {isSimPlaying ? (
+                                        <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 20 20"><path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zM7 8a1 1 0 012 0v4a1 1 0 11-2 0V8zm5-1a1 1 0 00-1 1v4a1 1 0 102 0V8a1 1 0 00-1-1z" clipRule="evenodd" /></svg>
+                                      ) : (
+                                        <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 20 20"><path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM9.555 7.168A1 1 0 008 8v4a1 1 0 001.555.832l3-2a1 1 0 000-1.664l-3-2z" clipRule="evenodd" /></svg>
+                                      )}
+                                    </button>
+                                  </div>
+
+                                  {/* 2. Animáció visszaállítása gomb tooltippel */}
+                                  <div className="relative group">
+                                    <div className="absolute bottom-full right-0 mb-2 hidden group-hover:block bg-slate-800 text-slate-200 text-[11px] py-1 px-2 rounded shadow-xl border border-slate-700 whitespace-nowrap z-50 pointer-events-none">
+                                      {lang === 'hu' ? 'Idő visszaállítása a kezdetre (0h)' : 'Reset propagation time to 0h'}
+                                      <div className="absolute top-full right-3 border-4 border-transparent border-t-slate-800"></div>
+                                    </div>
+                                    <button 
+                                      onClick={() => setSimTime(0)}
+                                      className="p-1 rounded bg-slate-800 hover:bg-slate-700 text-slate-300 flex"
+                                    >
+                                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M4 4v5h.582m15.356 2A8.001 8.001 0 1121.21 15H18.5" /></svg>
+                                    </button>
+                                  </div>
+
+                                  {/* 3. Pályadiagram Fullscreen gomb tooltippel */}
+                                  <div className="relative group">
+                                    <div className="absolute bottom-full right-0 mb-2 hidden group-hover:block bg-slate-800 text-slate-200 text-[11px] py-1 px-2 rounded shadow-xl border border-slate-700 whitespace-nowrap z-50 pointer-events-none">
+                                      {lang === 'hu' ? 'Pályadiagram megnyitása teljes képernyőn' : 'Open Orbit Map in full screen'}
+                                      <div className="absolute top-full right-3 border-4 border-transparent border-t-slate-800"></div>
+                                    </div>
+                                    <button 
+                                      onClick={() => setFullscreenElement(fullscreenElement === 'orbit' ? null : 'orbit')}
+                                      className="text-slate-400 hover:text-slate-200 p-1.5 rounded bg-slate-800 hover:bg-slate-700 flex"
+                                    >
+                                      <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M4 8V4m0 0h4M4 4l5 5m11-5h-4m4 0v4m0-4l-5 5M4 20v-4m0 4h4m-4 0l5-5m11 5h-4m4 0v-4m0 4l-5-5" /></svg>
+                                    </button>
+                                  </div>
+                                </div>
+                            
+                            
+                          </div>
+
+                          <div className="relative border border-slate-800/80 rounded-lg overflow-hidden bg-slate-950 w-full flex justify-center">
+                            <canvas 
+                              ref={orbitCanvasRef} 
+                              width={320} 
+                              height={320} 
+                              className="max-w-full aspect-square"
+                            />
+                            <div className="absolute bottom-2 left-2 text-[10px] text-slate-400 bg-slate-950/80 px-2 py-1 rounded border border-slate-800 font-sans">
+                              {lang === 'hu' ? 'Idő' : 'Time'}: <span className="font-mono text-amber-400">{Math.round(simTime)}h</span>
+                            </div>
+                          </div>
+
+                          <div className="w-full mt-4 flex items-center justify-between gap-4 font-sans">
+                            <span className="text-xs text-slate-400 font-medium">
+                              {lang === 'hu' ? 'Animáció sebesség:' : 'Propagation Speed:'}
+                            </span>
+                            <div className="flex gap-1.5">
+                              {[0.5, 1, 2, 5].map((s) => (
+                                <button
+                                  key={s}
+                                  onClick={() => setSimulationSpeed(s)}
+                                  className={`text-[10px] px-2 py-1 rounded font-bold transition ${
+                                    simulationSpeed === s ? 'bg-amber-500 text-slate-950' : 'bg-slate-800 hover:bg-slate-700 text-slate-300'
+                                  }`}
+                                >
+                                  {s}x
+                                </button>
+                              ))}
+                            </div>
+                          </div>
+                        </div>
+
+                      </div>
+
+                      <div className="bg-slate-900 border border-slate-800 rounded-xl p-5 shadow-xl flex flex-col justify-between font-sans">
+                        <div>
+                          <div className="flex justify-between items-center mb-3">
+                            <span className="text-[10px] font-bold text-amber-500 tracking-widest uppercase">
+                              {lang === 'hu' ? 'Esemény  adatai' : 'CME parameters'}
+                            </span>
+                            <a 
+                              href={selectedCme?.link} 
+                              target="_blank" 
+                              rel="noopener noreferrer" 
+                              className="text-[10px] text-slate-400 hover:text-slate-200 underline flex items-center gap-1"
+                            >
+                              NASA DONKI Portal ↗
+                            </a>
+                          </div>
+
+                          <h3 className="text-lg font-bold text-slate-100 mb-2">{selectedCme?.activityID}</h3>
+                          <p className="text-xs text-slate-300 leading-relaxed mb-4">{selectedCme?.note}</p>
+
+                          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-4">
+                            <div className="bg-slate-950/50 p-2.5 rounded border border-slate-800/80">
+                              <span className="block text-[10px] text-slate-400">{lang === 'hu' ? 'Kezdeti Sebesség' : 'Launch Velocity'}</span>
+                              <span className="text-sm font-mono font-bold text-slate-100">
+                                {selectedCme?.cmeAnalyses?.[0]?.speed ? `${selectedCme.cmeAnalyses[0].speed} km/s` : 'N/A'}
+                              </span>
+                            </div>
+
+                            <div className="bg-slate-950/50 p-2.5 rounded border border-slate-800/80">
+                              <span className="block text-[10px] text-slate-400">{lang === 'hu' ? 'Flare Osztály' : 'Solar Flare'}</span>
+                              <span className="text-sm font-mono font-bold text-red-400">
+                                {selectedCme?.cmeAnalyses?.[0]?.associatedFeatures?.[0]?.classType || 'Class N/A'}
+                              </span>
+                            </div>
+
+                            <div className="bg-slate-950/50 p-2.5 rounded border border-slate-800/80">
+                              <span className="block text-[10px] text-slate-400">{lang === 'hu' ? 'Fél-nyílásszög' : 'Half-angle'}</span>
+                              <span className="text-sm font-mono font-bold text-slate-100">
+                                {selectedCme?.cmeAnalyses?.[0]?.halfAngle ? `${selectedCme.cmeAnalyses[0].halfAngle}°` : 'N/A'}
+                              </span>
+                            </div>
+
+                            <div className="bg-slate-950/50 p-2.5 rounded border border-slate-800/80">
+                              <span className="block text-[10px] text-slate-400">{lang === 'hu' ? 'HEEQ Szél/Hossz' : 'HEEQ Lat/Lon'}</span>
+                              <span className="text-sm font-mono font-bold text-slate-100">
+                                {selectedCme?.cmeAnalyses?.[0]?.longitude !== undefined 
+                                  ? `${selectedCme.cmeAnalyses[0].latitude}° / ${selectedCme.cmeAnalyses[0].longitude}°` 
+                                  : 'N/A'}
+                              </span>
+                            </div>
+                          </div>
+                        </div>
+
+                        <div className="border-t border-slate-800 pt-3">
+                          <span className="block text-[10px] text-slate-400 mb-1.5 uppercase tracking-wider">
+                            {lang === 'hu' ? 'Műszerek' : 'Instrumentation & Coronagraphs'}
+                          </span>
+                          <div className="flex flex-wrap gap-1.5">
+                            {selectedCme?.instruments?.map((inst, i) => (
+                              <span key={i} className="text-[10px] bg-slate-800 px-2 py-0.5 rounded text-slate-300 font-mono">
+                                {inst.displayName}
+                              </span>
+                            ))}
+                          </div>
+                        </div>
+
+                      </div>
+
+                    </div>
+                  )}
+
+                  {activeTab === 'raw_json' && (
+                    <div className="bg-slate-900 border border-slate-800 rounded-xl p-5 shadow-xl flex-1 flex flex-col font-sans">
+                      <div className="flex justify-between items-center mb-3">
+                        <div>
+                          <h3 className="text-sm font-bold text-slate-300 uppercase tracking-wider">{lang === 'hu' ? 'NASA API JSON Adatok' : 'NASA API JSON Response'}</h3>
+                          <p className="text-xs text-slate-500">
+                            {lang === 'hu' ? 'Valós adatok a DONKI adatbázisból' : 'Serialized parameters directly from DONKI systems'}
+                          </p>
+                        </div>
+                        <button
+                          onClick={() => {
+                            navigator.clipboard.writeText(JSON.stringify(selectedCme, null, 2));
+                          }}
+                          className="text-xs bg-slate-800 hover:bg-slate-700 text-slate-300 px-3 py-1 rounded transition border border-slate-700"
+                        >
+                          {lang === 'hu' ? 'Másolás' : 'Copy'}
+                        </button>
+                      </div>
+
+                      <div className="flex-1 min-h-[350px] bg-slate-950 rounded-lg p-4 border border-slate-800 font-mono text-xs overflow-auto">
+                        <pre className="text-amber-300">{JSON.stringify(selectedCme, null, 2)}</pre>
+                      </div>
+                    </div>
+                  )}
+
+                  {activeTab === 'glossary' && (
+                    <div className="bg-slate-900 border border-slate-800 rounded-xl p-5 shadow-xl font-sans">
+                      <h3 className="text-sm font-bold text-slate-300 uppercase tracking-wider mb-4">
+                        {lang === 'hu' ? 'Űridőjárás Fogalomtár & Források' : 'Space Weather References'}
+                      </h3>
+                      
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        {(lang === 'hu' ? GLOSSARY_HU : GLOSSARY_EN).map((item, i) => (
+                          <div key={i} className="bg-slate-950/40 border border-slate-800/80 p-4 rounded-lg flex flex-col justify-between">
+                            <div>
+                              <h4 className="text-sm font-bold text-amber-400 mb-1.5">{item.term}</h4>
+                              <p className="text-xs text-slate-300 leading-relaxed mb-3">{item.definition}</p>
+                            </div>
+                            <a 
+                              href={item.link} 
+                              target="_blank" 
+                              rel="noopener noreferrer" 
+                              className="text-[10px] text-amber-500 hover:underline flex items-center gap-1 mt-2 self-start"
+                            >
+                              {lang === 'hu' ? 'Bővebben' : 'More info'} ↗
+                            </a>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                </section>
+
+              </main>
+
+              {showConfirmModal && (
+                <div className="fixed inset-0 z-[10000] bg-slate-950/80 backdrop-blur-sm flex items-center justify-center p-4 font-sans">
+                  <div className="bg-slate-900 border border-amber-500/30 rounded-xl max-w-md w-full p-6 shadow-2xl">
+                    <div className="flex items-center gap-3 text-amber-400 mb-4">
+                      <svg className="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" /></svg>
+                      <h3 className="text-lg font-bold">
+                        {lang === 'hu' ? 'Hosszú lekérdezési tartomány' : 'Large Date Range'}
+                      </h3>
+                    </div>
+                    
+                    <p className="text-sm text-slate-300 leading-relaxed mb-6">
+                      {lang === 'hu' 
+                        ? `A kiválasztott intervallum meghaladja a ${MAXDATERANGE} napot. A nagy mennyiségű adat letöltése és feldolgozása hosszabb időt vehet igénybe és leterhelheti a hálózatot. Biztosan folytatni szeretné?` 
+                        : `The chosen date range is larger than ${MAXDATERANGE} days. Fetching and loading multiple datasets might take more time and strain network bandwidth. Are you sure you want to continue?`}
+                    </p>
+
+                    <div className="flex gap-3 justify-end">
+                      <button 
+                        onClick={() => setShowConfirmModal(false)}
+                        className="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded text-sm transition"
+                      >
+                        {lang === 'hu' ? 'Mégse' : 'Cancel'}
+                      </button>
+                      <button 
+                        onClick={executeFetch}
+                        className="px-4 py-2 bg-gradient-to-r from-amber-500 to-orange-600 hover:from-amber-600 hover:to-orange-700 text-slate-950 font-bold rounded text-sm transition shadow-lg shadow-amber-500/20"
+                      >
+                        {lang === 'hu' ? 'Igen, folytatás' : 'Yes, continue'}
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {fullscreenElement && (
+                <div className="fixed inset-0 z-50 bg-slate-950 flex flex-col items-center justify-center p-4 font-sans">
+                  <button 
+                    onClick={() => setFullscreenElement(null)}
+                    className="absolute top-4 right-4 bg-slate-800 text-slate-100 hover:bg-slate-700 px-4 py-2 rounded-lg font-bold text-xs border border-slate-700 transition flex items-center gap-2"
+                  >
+                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M6 18L18 6M6 6l12 12" /></svg>
+                    {lang === 'hu' ? 'Bezárás (ESC)' : 'Close (ESC)'}
+                  </button>
+                  
+                  <div className="text-center mb-4">
+                    <h3 className="text-sm font-mono tracking-widest text-amber-400 uppercase">
+                      {fullscreenElement === 'disk' 
+                        ? (lang === 'hu' ? 'Napkorong (mutass a jelölésre)' : 'Solar Disk (Hover mouse on CME)')
+                        : (lang === 'hu' ? 'CEM Terjedés' : 'CME  Propagation')
+                      }
+                    </h3>
+                  </div>
+
+                  <div className="bg-slate-900 border border-slate-800 rounded-2xl overflow-hidden p-6 shadow-2xl flex justify-center items-center relative">
+                    {fullscreenElement === 'disk' ? (
+                      <div className="relative">
+                        <canvas 
+                          ref={fullscreenSunDiskCanvasRef} 
+                          width={540} 
+                          height={540} 
+                          onMouseMove={handleMouseMoveSunDisk}
+                          onMouseLeave={handleMouseLeaveSunDisk}
+                          className="max-h-[80vh] aspect-square cursor-crosshair"
+                        />
+                        
+                        {hoveredCmeDisk && (
+                          <div 
+                            className="fixed z-[9999] bg-slate-950/95 border border-amber-500/80 p-3.5 rounded-lg shadow-2xl pointer-events-none max-w-xs transition-opacity duration-150 text-xs text-left"
+                            style={{
+                              left: `${mousePos.x + 15}px`,
+                              top: `${mousePos.y + 15}px`,
+                            }}
+                          >
+                            <p className="text-[10px] font-mono text-amber-400 font-bold mb-1.5 tracking-wider uppercase">
+                              {lang === 'hu' ? 'CME FORRÁSKOORDINÁTÁK' : 'CME SOURCE PROFILE'}
+                            </p>
+                            <h4 className="text-xs font-bold text-slate-100 mb-2 border-b border-slate-800 pb-1.5 font-sans">
+                              {hoveredCmeDisk.activityID}
+                            </h4>
+                            <div className="space-y-1.5 text-[11px] text-slate-300 font-sans">
+                              <p><strong className="text-slate-400">{lang === 'hu' ? 'Napfolt' : 'AR Region'}:</strong> {hoveredCmeDisk.sourceLocation || 'N/A'}</p>
+                              <p><strong className="text-slate-400">{lang === 'hu' ? 'Kezdet' : 'Start time'}:</strong> {hoveredCmeDisk.startTime}</p>
+                              
+                              <div className="mt-2 pt-2 border-t border-slate-800 space-y-1 text-slate-200">
+                                <p className="text-[10px] text-amber-500 font-bold uppercase tracking-tight">
+                                  {lang === 'hu' ? 'Eredeti kitörési koordináták:' : 'Original coordinates:'}
+                                </p>
+                                <p className="font-mono bg-slate-900/60 p-1 rounded border border-slate-800/50 font-sans font-semibold">
+                                  Lat: {projectCoordinatesToEndDate(hoveredCmeDisk, endDate).originalLat}°, Lon: {projectCoordinatesToEndDate(hoveredCmeDisk, endDate).originalLon}°
+                                </p>
+                                
+                                <p className="text-[10px] text-green-400 font-bold uppercase tracking-tight mt-1.5">
+                                  {lang === 'hu' ? 'Záródátumra vetített koordináták:' : 'Projected (At End Date):'}
+                                </p>
+                                <p className="font-mono bg-slate-900/60 p-1 rounded border border-slate-800/50 text-green-300 font-sans font-semibold font-semibold font-semibold">
+                                  Lat: {projectCoordinatesToEndDate(hoveredCmeDisk, endDate).latitude}°, Lon: {projectCoordinatesToEndDate(hoveredCmeDisk, endDate).longitude}°
+                                </p>
+                              </div>
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    ) : (
+                      <canvas 
+                        ref={fullscreenOrbitCanvasRef} 
+                        width={540} 
+                        height={540} 
+                        className="max-h-[80vh] aspect-square"
+                      />
+                    )}
+                  </div>
+                </div>
+              )}
+
+              <footer className="bg-slate-950 border-t border-slate-900 px-6 py-4 text-center text-s text-slate-500 font-sans">
+                <p>© 2026 Boldi, <a href="https://nap.mcse.hu/" target="_blank" rel="noopener noreferrer" className="text-amber-400 hover:underline">MCSE Napészlelő Szakcsoport</a>  Adat Forrás/Data Source: NASA Space Weather Database of Notifications, Knowledge, and Information (DONKI).</p>
+              </footer>
+            </div>
+          );
+        }
+
+        const root = ReactDOM.createRoot(document.getElementById('root'));
+        root.render(<App />);
+    </script>
+</body>
+</html>

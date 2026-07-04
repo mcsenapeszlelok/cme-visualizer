@@ -952,6 +952,7 @@
                     break;
                   } else {
                     attempt++;
+                    url = `https://kauai.ccmc.gsfc.nasa.gov/DONKI/WS/get/CME?startDate=${startDate}&endDate=${endDate}`
                     if (attempt >= maxAttempts) break;
                     await new Promise(resolve => setTimeout(resolve, attempt * 1000));
                   }

@@ -5,7 +5,6 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>CME Visualizer</title>
     <!-- Tailwind CSS CDN -->
-    <link rel="shortcut icon" href="favicon.ico" type="image/x-icon">
     <script src="https://cdn.tailwindcss.com"></script>
     <!-- React and ReactDOM production builds from CDN -->
     <script src="https://unpkg.com/react@18/umd/react.production.min.js" crossorigin></script>
@@ -279,23 +278,23 @@
 
         const GLOSSARY_EN = [
           { term: "CME (Coronal Mass Ejection)", definition: "A massive bubble of solar plasma and magnetic field launched into space. Triggers geomagnetic storms and aurorae upon reaching Earth.", link: "https://www.swpc.noaa.gov/phenomena/coronal-mass-ejections" },
-          { term: "Flares", definition: "The most powerful class of solar flares. Radiation can trigger planet-wide radio blackouts on Earth's daylight side.", link: "https://science.nasa.gov/sun/solar-storms-and-flares/" },
+          { term: "Flares", definition: "At the two ends of magnetic field lines with opposite polarities, the adjacent magnetic fields interconnect, a process during which a significant amount of energy can be released.", link: "https://science.nasa.gov/sun/solar-storms-and-flares/" },
           { term: "Geomagnetic Storm", definition: "A major disturbance of Earth's magnetosphere caused by energy transfer from solar wind/CMEs, rated from G1 (Minor) to G5 (Extreme).", link: "https://www.swpc.noaa.gov/noaa-scales-explanation" },
-          { term: "Active Regions and Sunspots", definition: "An area on the Sun's surface with highly concentrated and complex magnetic fields, producing solar flares and CMEs.", link: "https://www.weather.gov/fsd/sunspots" },
+          { term: "Active Regions and Sunspots", definition: "Along magnetic fields in the photosphere, certain areas heat up, and solar plages become visible; these are called active regions. Within these regions, sunspots are areas that are often a few hundred or thousand degrees cooler and darker.", link: "https://www.weather.gov/fsd/sunspots" },
           { term: "Hungarian Astronomical Association", definition: "The Hungarian Astronomical Association (MCSE) is the largest and oldest group of amateur astronomers in Hungary.", link: "https://mcse.hu" },
           { term: "MCSE Solar Section", definition: "The Solar Section of the Hungarian Astronomical Association (MCSE) is a group of amateur astronomers dedicated to Solar observation.", link: "https://nap.mcse.hu" },
-          { term: "Magyar Napfizikai Alapítvány (MNA)", definition: "To create an environment for Hungarian ground-based observations for solar and heliophysical scientific research and education. To carry out solar and heliophysical observations and to process.", link: "http://hspf.eu" }
+          { term: "Hungarian Solar Physics Foundation (MNA)", definition: "To create an environment for Hungarian ground-based observations for solar and heliophysical scientific research and education. To carry out solar and heliophysical observations and to process.", link: "http://hspf.eu" }
 
         ];
 
         const GLOSSARY_HU = [
-          { term: "CME (Koronakidobódás)", definition: "A Nap koronájából a bolygóközi térbe kilőtt hatalmas plazmafelhő és mágneses mező, amely sarki fényt és geomágneses vihart okoz.", link: "https://www.swpc.noaa.gov/phenomena/coronal-mass-ejections" },
-          { term: "Flerek", definition: "A napkitörések legintenzívebb kategóriája. Azonnali rádiózavarokat okozhat a Föld nappali féltekéjén.", link: "https://science.nasa.gov/sun/solar-storms-and-flares/" },
+          { term: "CME (Koronakidobódás)", definition: "A Nap koronájából a bolygóközi térbe kilőtt plazmafelhő és mágneses mező, amely sarki fényt és geomágneses vihart okozhat, ha eléri a Földet.", link: "https://www.swpc.noaa.gov/phenomena/coronal-mass-ejections" },
+          { term: "Flerek", definition: "Ellentétes polaritású mágneses erővonalak két végénél a szomszédos mágneses tér átkötődik, melynek során jelentős mennyiségű energia szabadulhat fel.", link: "https://science.nasa.gov/sun/solar-storms-and-flares/" },
           { term: "Geomágneses vihar", definition: "A Föld mágneses pajzsának átmeneti perturbációja, amelyet a Napból kilökődött nagysebességű plazma okoz. G1 és G5 közötti fokozatú.", link: "https://www.swpc.noaa.gov/noaa-scales-explanation" },
-          { term: "Aktív Régiók és napfoltok", definition: "Különösen erős és kuszált mágneses terekkel rendelkező zóna a Nap fotoszférájában, a napkitörések elsődleges fészke.", link: "https://www.weather.gov/fsd/sunspots" },
+          { term: "Aktív Régiók és napfoltok", definition: "A mágneses mezők mentén  a fotoszférában egyes területek felmelegednek, napfáklyák válnak láthatóvá, melyeket aktív régióknak nevezünk. Ezeken belül sokszor pár száz vagy ezer fokkal hűvösebb, sötétebb területek a napfoltok.", link: "https://www.weather.gov/fsd/sunspots" },
           { term: "Magyar Csillagászati Egyesület", definition: "A Magyar Csillagászati Egyesület (MCSE) Magyarország legnagyobb amatőrcsillagász egyesülete, célja a csillagászat megismertetése és megszerettetése.", link: "https://mcse.hu" },
           { term: "MCSE Nap szakcsoport", definition: "A Magyar Csillagászati Egyesület Nap szakcsoportja a Napészlelés iránt érdeklődő amatőrcsillagászokat fog össze.", link: "https://nap.mcse.hu" },
-          { term: "Hungarian Solar Physics Foundation (MNA)", definition: "A magyar nap- és heliofizikai tudományos és oktatói földi típusú észlelések körülményeinek megteremtése, nap- és heliofizikai észlelések lebonyolítása és az így nyert adatok feldolgozása.", link: "http://hspf.eu" }
+          { term: "Magyar Napfizikai Alapítvány (MNA)", definition: "A magyar nap- és heliofizikai tudományos és oktatói földi típusú észlelések körülményeinek megteremtése, nap- és heliofizikai észlelések lebonyolítása és az így nyert adatok feldolgozása.", link: "http://hspf.eu" }
         ];
 
         async function computeSolarParameters(dateStr) {
@@ -1154,7 +1153,7 @@
                         activeTab === 'visualizer' ? 'bg-slate-800 text-amber-400 border border-slate-700' : 'text-slate-400 hover:text-slate-200'
                       }`}
                     >
-                      {lang === 'hu' ? 'Napkorong & CME Terjedés' : 'Solar Disk & CME Propagation'}
+                      {lang === 'hu' ? 'Szimulációk' : 'Simulations'}
                     </button>
                     <button
                       onClick={() => setActiveTab('raw_json')}
@@ -1170,7 +1169,7 @@
                         activeTab === 'glossary' ? 'bg-slate-800 text-amber-400 border border-slate-700' : 'text-slate-400 hover:text-slate-200'
                       }`}
                     >
-                      {lang === 'hu' ? 'Fogalomtár & Tudástár' : 'Definitions & Glossary'}
+                      {lang === 'hu' ? 'Tudástár' : 'Definitions & Glossary'}
                     </button>
                   </div>
 
